@@ -46,3 +46,8 @@ class CNN(BaseModel):
         out = out.view(batch_size, -1)  # flatten the vector
         out = self.classifier(out)
         return out
+
+
+
+
+

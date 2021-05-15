@@ -2,5 +2,6 @@ projects/
 input/
 
 .vscode/
+.idea/
 
 *.pyc

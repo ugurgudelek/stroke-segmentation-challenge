@@ -1,0 +1,25 @@
+name: stroke
+channels:
+  - pytorch
+  - plotly
+  - conda-forge
+  - nvidia
+  - defaults
+dependencies:
+  - python=3.9
+  - pytorch=1.8.1
+  - torchaudio
+  - torchvision
+  - cudatoolkit=11.1
+  - xarray
+  - pyyaml
+  - matplotlib
+  - scikit-learn
+  - tqdm
+  - matplotlib
+  - seaborn
+  - plotly
+  - ipykernel
+  - nb_conda
+  - yapf
+  - pip

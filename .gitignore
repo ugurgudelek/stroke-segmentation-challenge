@@ -1,0 +1,6 @@
+projects/
+input/
+
+.vscode/
+
+*.pyc

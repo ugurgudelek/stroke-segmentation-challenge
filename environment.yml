@@ -12,6 +12,7 @@ dependencies:
   - torchvision
   - cudatoolkit=11.1
   - xarray
+  - netCDF4 
   - pyyaml
   - matplotlib
   - scikit-learn

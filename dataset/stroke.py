@@ -1,64 +1,82 @@
 # -*- encoding: utf-8 -*-
-# @File    :   stroke-experiment.py
-# @Time    :   2021/05/16 00:45:06
-# @Author  :   Ugur Gudelek, Gorkem Can Ates
+# @File    :   stroke.py
+# @Time    :   2021/05/16 01:40:50
+# @Author  :   Ugur Gudelek
 # @Contact :   ugurgudelek@gmail.com
 # @Desc    :   None
-import torch
-from torch.utils.data import Dataset
-from pathlib import Path
-import os
+
+import xarray as xr
 import numpy as np
 from PIL import Image
-import torchvision.transforms.functional as TF
-from torch.utils.data import DataLoader
+
+from pathlib import Path
+from tqdm import tqdm
 
 
-class StrokeClassificationDataset:
-    def __init__(self, train_dir, test_dir, transform=None):
-        self.trainset = StrokeClassificationTorch(images=training_mage)
-        self.testset = StrokeClassificationTorch()
+class Stroke:
+    WIDTH, HEIGHT = (512, 512)
+    CLASSES = {'no-stroke': 0, 'stroke': 1}
+
+    def __init__(self, root: Path):
+        self.root = root
+
+        # Read no stroke images
+        no_stroke_image_paths = list(
+            (self.root / 'raw/INMEYOK/PNG').glob('*.png'))
+        no_stroke_images = self.read_images(image_paths=no_stroke_image_paths)
+        no_stroke_ids = list(map(lambda p: p.stem, no_stroke_image_paths))
+
+        # Read stroke images
+        stroke_image_paths = list((self.root / 'raw/KANAMA/PNG').glob('*.png'))
+        stroke_image_paths.extend(
+            list((self.root / 'raw/ISKEMI/PNG').glob('*.png')))
+        stroke_images = self.read_images(image_paths=stroke_image_paths)
+        stroke_ids = list(map(lambda p: p.stem, stroke_image_paths))
+
+        no_stroke_data = xr.Dataset(data_vars=dict(
+            image=(['id', 'x', 'y'], no_stroke_images),
+            label=(['id'], [Stroke.CLASSES['no-stroke']] * len(no_stroke_images))),
+                                    coords=dict(id=('id', no_stroke_ids),
+                                                x=('x', range(Stroke.WIDTH)),
+                                                y=('y', range(Stroke.HEIGHT)))) # yapf: disable
+
+        stroke_data = xr.Dataset(data_vars=dict(
+            image=(['id', 'x', 'y'], stroke_images),
+            label=(['id'], [Stroke.CLASSES['stroke']] * len(stroke_images))),
+                                 coords=dict(id=('id', stroke_ids),
+                                             x=('x', range(Stroke.WIDTH)),
+                                             y=('y', range(Stroke.HEIGHT)))) # yapf: disable
+
+        self.dataset = xr.concat([no_stroke_data, stroke_data], dim='id')
+
+        save_path = self.root / Path('nc')
+        save_path.mkdir()
+        self.dataset.to_netcdf(path=save_path / 'stroke.nc', engine='netcdf4')
+
+    @staticmethod
+    def read_images(image_paths):
+        images = []
+        for img_path in tqdm(image_paths):
+            # Read image and convert greyscale
+            img = Image.open(img_path).convert('L')
+
+            if img.size != (Stroke.WIDTH, Stroke.HEIGHT):
+                # center crop
+                w, h = img.size
+                left = (w - Stroke.WIDTH) / 2
+                top = (h - Stroke.HEIGHT) / 2
+                right = (w + Stroke.WIDTH) / 2
+                bottom = (h + Stroke.HEIGHT) / 2
+
+                img = img.crop((left, top, right, bottom))
+
+            images.append(np.asarray(img))
+
+        return np.asarray(images)
 
 
-class StrokeClassificationTorch(Dataset):
-    def __init__(self, image_dir, targetfolder, transform=None):
-        self.image_dir = image_dir
-        self.transform = transform
-        self.targetfolder = targetfolder
-        self.images = os.listdir(image_dir)
+if __name__ == '__main__':
+    Stroke(root=Path('./input/stroke'))
 
-    def __getitem__(self, item):
-        image_path = os.path.join(self.image_dir, self.images[item])
-        image = np.array(Image.open(image_path).convert('RGB'))
-        if targetfolder == 'INME-YOK':
-            target = np.zeros(1)
-        else:
-            target = np.ones(1)
-
-        if self.transform is not None:
-            image = self.transform(image)
-
-        return image, target
-
-    def __len__(self):
-        return len(self.images)
-
-
-
-
-class StrokeSegmentationDataset:
-    def __init__(self):
-        self.trainset = StrokeTorch(images=training_mage)
-        self.testset = StrokeTorch()
-
-
-class StrokeSegmentationTorch(Dataset):
-    def __init__(self, images, labels):
-        self.images = images
-        self.labels = labels
-
-    def __getitem__(self, item):
-        pass
-
-    def __len__(self):
-        pass
+    # to open dataset just write this:
+    # xr.open_dataset(Path('./input/stroke/nc/stroke.nc'))

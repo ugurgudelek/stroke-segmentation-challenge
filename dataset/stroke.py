@@ -34,31 +34,33 @@ class Stroke:
         stroke_ids = list(map(lambda p: p.stem, stroke_image_paths))
 
         no_stroke_data = xr.Dataset(data_vars=dict(
-            image=(['id', 'x', 'y'], no_stroke_images),
+            image=(['id', 'c', 'x', 'y'], no_stroke_images),
             label=(['id'], [Stroke.CLASSES['no-stroke']] * len(no_stroke_images))),
                                     coords=dict(id=('id', no_stroke_ids),
                                                 x=('x', range(Stroke.WIDTH)),
-                                                y=('y', range(Stroke.HEIGHT)))) # yapf: disable
+                                                y=('y', range(Stroke.HEIGHT)),
+                                                c=('c', ['R', 'G', 'B'])))  # yapf: disable
 
         stroke_data = xr.Dataset(data_vars=dict(
-            image=(['id', 'x', 'y'], stroke_images),
+            image=(['id', 'c', 'x', 'y'], stroke_images),
             label=(['id'], [Stroke.CLASSES['stroke']] * len(stroke_images))),
                                  coords=dict(id=('id', stroke_ids),
                                              x=('x', range(Stroke.WIDTH)),
-                                             y=('y', range(Stroke.HEIGHT)))) # yapf: disable
+                                             y=('y', range(Stroke.HEIGHT)),
+                                             c=('c', ['R', 'G', 'B'])))  # yapf: disable
 
         self.dataset = xr.concat([no_stroke_data, stroke_data], dim='id')
 
         save_path = self.root / Path('nc')
-        save_path.mkdir()
+        save_path.mkdir(exist_ok=True)
         self.dataset.to_netcdf(path=save_path / 'stroke.nc', engine='netcdf4')
 
     @staticmethod
     def read_images(image_paths):
         images = []
         for img_path in tqdm(image_paths):
-            # Read image and convert greyscale
-            img = Image.open(img_path).convert('L')
+            # Read image and drop alpha channel
+            img = Image.open(img_path).convert('RGB')
 
             if img.size != (Stroke.WIDTH, Stroke.HEIGHT):
                 # center crop
@@ -70,13 +72,14 @@ class Stroke:
 
                 img = img.crop((left, top, right, bottom))
 
+            img = np.asarray(img)
+            img = np.transpose(img, (2, 0, 1))
             images.append(np.asarray(img))
 
         return np.asarray(images)
 
 
 if __name__ == '__main__':
+
     Stroke(root=Path('./input/stroke'))
 
-    # to open dataset just write this:
-    # xr.open_dataset(Path('./input/stroke/nc/stroke.nc'))

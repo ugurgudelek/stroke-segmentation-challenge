@@ -12,38 +12,53 @@ import numpy as np
 from PIL import Image
 import torchvision.transforms.functional as TF
 from torch.utils.data import DataLoader
+import xarray as xr
+from sklearn.model_selection import train_test_split
 
 
 class StrokeClassificationDataset:
-    def __init__(self, root):
-        self.root = root
+    def __init__(self, root, transform, test_size):
+        self.root = root  # Path('./input/stroke')
+        self.dataset = self.root / 'nc/stroke.nc'
 
-        self.trainset = StrokeClassificationTorch()
-        self.testset = StrokeClassificationTorch()
+        ds = xr.open_dataset(self.dataset)
+
+        index_train, index_test = train_test_split(np.arange(len(ds.label)),
+                                                   test_size=test_size,
+                                                   random_state=42,
+                                                   shuffle=True)
+
+        self.train_dataset = ds.isel({'id': index_train})
+        self.test_dataset = ds.isel({'id': index_test})
+
+        self.trainset = StrokeClassificationTorch(images=self.train_dataset.image.values,
+                                                  targets=self.train_dataset.label.values,
+                                                  transform=transform)
+        self.testset = StrokeClassificationTorch(images=self.test_dataset.image.values,
+                                                 targets=self.test_dataset.label.values,
+                                                 transform=transform)
 
 
 class StrokeClassificationTorch(Dataset):
-    def __init__(self, image_dir, targetfolder, transform=None):
-        self.image_dir = image_dir
+    def __init__(self, images, targets, transform):
+        self.images = images
+        self.targets = targets
         self.transform = transform
-        self.targetfolder = targetfolder
-        self.images = os.listdir(image_dir)
 
-    def __getitem__(self, item):
-        image_path = os.path.join(self.image_dir, self.images[item])
-        image = np.array(Image.open(image_path).convert('RGB'))
-        if targetfolder == 'INME-YOK':
-            target = np.zeros(1)
-        else:
-            target = np.ones(1)
+    def __getitem__(self, ix):
+        x = self.images[ix]
+        y = self.targets[ix]
 
-        if self.transform is not None:
-            image = self.transform(image)
+        # Transform images
+        x = torch.as_tensor(x, dtype=torch.float32)/255.
+        y = torch.as_tensor(y, dtype=torch.float32).unsqueeze(dim=0)
+        # if self.transform is not None:
+        #     x = self.transform(x)
 
-        return image, target
+        return {'data': x, 'target': y }
 
     def __len__(self):
-        return len(self.images)
+        return len(self.targets)
 
 
 if __name__ == '__main__':

@@ -11,7 +11,7 @@ class Precision(nn.Module):
         preds = torch.round(yhat).detach()
         TP = torch.sum((preds == 1) * (y == 1))
         FP = torch.sum((preds == 1) * (y == 0))
-        return TP / (TP + FP + self.eps)
+        return (TP / (TP + FP + self.eps)).cpu().numpy().item()
 
 
 class Recall(nn.Module):
@@ -23,7 +23,7 @@ class Recall(nn.Module):
         preds = torch.round(yhat).detach()
         TP = torch.sum((preds == 1) * (y == 1))
         FN = torch.sum((preds == 0) * (y == 1))
-        return TP / (TP + FN + self.eps)
+        return (TP / (TP + FN + self.eps)).cpu().numpy().item()
 
 
 class FPR(nn.Module):
@@ -35,7 +35,7 @@ class FPR(nn.Module):
         preds = torch.round(yhat).detach()
         FP = torch.sum((preds == 1) * (y == 0))
         TN = torch.sum((preds == 0) * (y == 0))
-        return FP / (FP + TN + self.eps)
+        return (FP / (FP + TN + self.eps)).cpu().numpy().item()
 
 
 class F1(nn.Module):
@@ -48,4 +48,4 @@ class F1(nn.Module):
         TP = torch.sum((preds == 1) * (y == 1))
         FN = torch.sum((preds == 0) * (y == 1))
         FP = torch.sum((preds == 1) * (y == 0))
-        return TP / (TP + 0.5 * (FP + FN) + self.eps)
+        return (TP / (TP + 0.5 * (FP + FN) + self.eps)).cpu().numpy().item()

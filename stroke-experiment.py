@@ -15,15 +15,18 @@ from berries.metric import metrics
 from berries.logger import MultiLogger
 
 from dataset.stroke_classification import StrokeClassificationDataset
-from model.cnn import VGG16, CNN
+from model.cnn import VGG16, CNN, DenseNet, ResNet
 from trainer.demo import DemoTrainer
 from metric import metrics as local_metrics
 from dataset.stroke import Stroke
+from loss.losses import WeightedBCELoss
 
 
 class StrokeExperiment(Experiment):
     def __init__(self):
         self.params = {
+            # 'project_name': 'stroke',
+            # 'experiment_name': 'ResNet-161-WBCE-lr1e-4-bsize-8-pretrained-0-dataaug-1-TL-0',
             'project_name': 'debug',
             'experiment_name': 'stroke',
             'seed': 42,
@@ -32,7 +35,7 @@ class StrokeExperiment(Experiment):
             'resume': False,
             'pretrained': False,
             'log_interval': 1,
-            'stdout_interval': 256,
+            'stdout_interval': 1,
             'save_checkpoint': True,
             'root': Path('.'),
             'verbose': 1,
@@ -40,22 +43,27 @@ class StrokeExperiment(Experiment):
         }  # yapf: disable
 
         self.hyperparams = {
-            'lr': 0.001,
+            'lr': 0.0001,
             'weight_decay': 0.,
-            'epoch': 11,
-            'batch_size': 8,
-            'validation_batch_size': 8,
+            'epoch': 100,
+            'batch_size': 64,
+            'validation_batch_size': 64,
         }  # yapf: disable
 
+        self.alpha = 0.333
         # Create netcdf4 file for faster reading
-        Stroke(root=Path('./input/stroke'))
+        # Stroke(root=Path('./input/stroke'))
 
-        self.model = CNN(in_channels=3, out_channels=1, input_dim=(3, 512, 512))
+        self.model = CNN(in_channels=3, out_channels=2, input_dim=(3, 512, 512))
         # self.model = VGG16(pre_trained=False, req_grad=True, bn=False, out_channels=1, input_dim=(3, 512, 512))
+        # self.model = ResNet(net_type='ResNet-152', pre_trained=False, req_grad=True, out_channels=1,
+        #                     input_dim=(3, 512, 512))
         print(self.model)
 
         self.dataset = StrokeClassificationDataset(Path('../stroke-segmentation-challenge/input/stroke'),
-                                                   transform=None,
+                                                   transform=transforms.Compose([transforms.RandomRotation((-180, 180)),
+                                                                                 transforms.RandomHorizontalFlip(p=0.5),
+                                                                                 transforms.RandomVerticalFlip(p=0.5)]),
                                                    test_size=0.25)
         self.logger = MultiLogger(
             root=self.params['root'],
@@ -66,8 +74,14 @@ class StrokeExperiment(Experiment):
 
         self.trainer = DemoTrainer(
             model=self.model,
-            criterion=torch.nn.BCELoss(),
-            metrics=[metrics.Accuracy, local_metrics.Recall, local_metrics.FPR],
+            criterion=torch.nn.CrossEntropyLoss(weight=torch.tensor([self.alpha, 1 - self.alpha]).to('cuda')),
+            # criterion=WeightedBCELoss([self.alpha, 1-self.alpha]),
+            # metrics=[metrics.Accuracy,
+            #          local_metrics.MeanMetric,
+            #          local_metrics.Recall,
+            #          local_metrics.FPR],
+            metrics=[metrics.Accuracy],
+
             hyperparams=self.hyperparams,
             params=self.params,
             logger=self.logger
@@ -84,3 +98,5 @@ class StrokeExperiment(Experiment):
 if __name__ == '__main__':
     experiment = StrokeExperiment()
     experiment.run()
+
+

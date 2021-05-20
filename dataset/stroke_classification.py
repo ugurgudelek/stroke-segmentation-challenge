@@ -51,9 +51,9 @@ class StrokeClassificationTorch(Dataset):
 
         # Transform images
         x = torch.as_tensor(x, dtype=torch.float32)/255.
-        y = torch.as_tensor(y, dtype=torch.float32).unsqueeze(dim=0)
-        # if self.transform is not None:
-        #     x = self.transform(x)
+        y = torch.as_tensor(y, dtype=torch.long)
+        if self.transform is not None:
+            x = self.transform(x)
 
         return {'data': x, 'target': y }
 

@@ -7,8 +7,8 @@ class Accuracy(nn.Module):
         super().__init__()
 
     def forward(self, yhat, y):
-        preds = torch.round(yhat).detach()
-        acc = torch.sum(preds == y)/yhat.size(0)
+        preds = (torch.argmax(yhat, dim=1)).detach()
+        acc = (torch.sum(preds == y))/yhat.size(0)
         return acc.cpu().numpy().item()
 
 
@@ -18,7 +18,7 @@ class Precision(nn.Module):
         self.eps = eps
 
     def forward(self, yhat, y):
-        preds = torch.round(yhat).detach()
+        preds = (torch.argmax(yhat, dim=1)).detach()
         TP = torch.sum((preds == 1) * (y == 1))
         FP = torch.sum((preds == 1) * (y == 0))
         return (TP / (TP + FP + self.eps)).cpu().numpy().item()
@@ -30,7 +30,8 @@ class Recall(nn.Module):
         self.eps = eps
 
     def forward(self, yhat, y):
-        preds = torch.round(yhat).detach()
+
+        preds = (torch.argmax(yhat, dim=1)).detach()
         TP = torch.sum((preds == 1) * (y == 1))
         FN = torch.sum((preds == 0) * (y == 1))
         return (TP / (TP + FN + self.eps)).cpu().numpy().item()
@@ -42,12 +43,12 @@ class FPR(nn.Module):
         self.eps = eps
 
     def forward(self, yhat, y):
-        preds = torch.round(yhat).detach()
+        preds = (torch.argmax(yhat, dim=1)).detach()
         FP = torch.sum((preds == 1) * (y == 0))
         TN = torch.sum((preds == 0) * (y == 0))
         return (FP / (FP + TN + self.eps)).cpu().numpy().item()
 
-
+# torch.round
 class MeanMetric(nn.Module):
 
     def __init__(self):
@@ -56,6 +57,7 @@ class MeanMetric(nn.Module):
         self.fpr = FPR()
 
     def forward(self, yhat, y):
+
         recall = self.recall(yhat, y)
         fpr = self.fpr(yhat, y)
         return (recall + fpr) / 2
@@ -67,7 +69,7 @@ class F1(nn.Module):
         self.eps = eps
 
     def forward(self, yhat, y):
-        preds = torch.round(yhat).detach()
+        preds = (torch.argmax(yhat, dim=1)).detach()
         TP = torch.sum((preds == 1) * (y == 1))
         FN = torch.sum((preds == 0) * (y == 1))
         FP = torch.sum((preds == 1) * (y == 0))

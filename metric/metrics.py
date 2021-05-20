@@ -47,7 +47,7 @@ class Specificity(nn.Module):
         TN = torch.sum((preds == 0) * (y == 0))
         return 1 - (FP / (FP + TN + self.eps)).cpu().numpy().item()
 
-
+# torch.round
 class MeanMetric(nn.Module):
 
     def __init__(self):
@@ -56,6 +56,7 @@ class MeanMetric(nn.Module):
         self.specificity = Specificity()
 
     def forward(self, yhat, y):
+
         recall = self.recall(yhat, y)
         specificity = self.specificity(yhat, y)
         return (recall + specificity) / 2

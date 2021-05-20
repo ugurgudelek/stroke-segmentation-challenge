@@ -8,7 +8,7 @@ class Accuracy(nn.Module):
 
     def forward(self, yhat, y):
         preds = (torch.argmax(yhat, dim=1)).detach()
-        acc = (torch.sum(preds == y))/yhat.size(0)
+        acc = (torch.sum(preds == y)) / yhat.size(0)
         return acc.cpu().numpy().item()
 
 
@@ -30,14 +30,13 @@ class Recall(nn.Module):
         self.eps = eps
 
     def forward(self, yhat, y):
-
         preds = (torch.argmax(yhat, dim=1)).detach()
         TP = torch.sum((preds == 1) * (y == 1))
         FN = torch.sum((preds == 0) * (y == 1))
         return (TP / (TP + FN + self.eps)).cpu().numpy().item()
 
 
-class FPR(nn.Module):
+class Specificity(nn.Module):
     def __init__(self, eps=1e-6):
         super().__init__()
         self.eps = eps
@@ -46,7 +45,7 @@ class FPR(nn.Module):
         preds = (torch.argmax(yhat, dim=1)).detach()
         FP = torch.sum((preds == 1) * (y == 0))
         TN = torch.sum((preds == 0) * (y == 0))
-        return (FP / (FP + TN + self.eps)).cpu().numpy().item()
+        return 1 - (FP / (FP + TN + self.eps)).cpu().numpy().item()
 
 # torch.round
 class MeanMetric(nn.Module):
@@ -54,13 +53,13 @@ class MeanMetric(nn.Module):
     def __init__(self):
         super().__init__()
         self.recall = Recall()
-        self.fpr = FPR()
+        self.specificity = Specificity()
 
     def forward(self, yhat, y):
 
         recall = self.recall(yhat, y)
-        fpr = self.fpr(yhat, y)
-        return (recall + fpr) / 2
+        specificity = self.specificity(yhat, y)
+        return (recall + specificity) / 2
 
 
 class F1(nn.Module):

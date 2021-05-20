@@ -13,8 +13,10 @@ from torchvision import models
 import functools
 import operator
 
+
 class CNN(BaseModel):
     """Basic Pytorch CNN implementation"""
+
     def __init__(self, in_channels, out_channels, input_dim):
         nn.Module.__init__(self)
         self.feature_extractor = nn.Sequential(
@@ -37,7 +39,6 @@ class CNN(BaseModel):
         self.classifier = nn.Sequential(
             nn.Linear(in_features=num_features_before_fcnn, out_features=100),
             nn.Linear(in_features=100, out_features=out_channels),
-            nn.Sigmoid()
         )
 
     def forward(self, x):
@@ -67,9 +68,10 @@ class VGG16(BaseModel):
 
         self.classifier = nn.Sequential(
             nn.Linear(in_features=num_features_before_fcnn, out_features=1024),
+            nn.ReLU(inplace=True),
             nn.Linear(in_features=1024, out_features=512),
+            nn.ReLU(inplace=True),
             nn.Linear(in_features=512, out_features=out_channels),
-            nn.Sigmoid()
         )
 
     def forward(self, x):
@@ -98,9 +100,10 @@ class VGG19(BaseModel):
 
         self.classifier = nn.Sequential(
             nn.Linear(in_features=num_features_before_fcnn, out_features=1024),
+            nn.ReLU(inplace=True),
             nn.Linear(in_features=1024, out_features=512),
+            nn.ReLU(inplace=True),
             nn.Linear(in_features=512, out_features=out_channels),
-            nn.Sigmoid()
         )
 
     def forward(self, x):
@@ -135,7 +138,6 @@ class DenseNet(BaseModel):
 
         self.classifier = nn.Sequential(
             nn.Linear(in_features=num_features_before_fcnn, out_features=out_channels),
-            nn.Sigmoid()
 
         )
 
@@ -174,7 +176,6 @@ class ResNet(BaseModel):
 
         self.classifier = nn.Sequential(
             nn.Linear(in_features=num_features_before_fcnn, out_features=out_channels),
-            nn.Sigmoid()
 
         )
 
@@ -186,3 +187,58 @@ class ResNet(BaseModel):
         return out
 
 
+class CustomCNN(BaseModel):
+    def __init__(self, in_channels, out_channels, input_dim):
+        nn.Module.__init__(self)
+        self.feature_extractor = nn.Sequential(
+            conv_block(in_features=in_channels, out_features=32, padding=1, gn=True),
+            conv_block(in_features=32, out_features=32, padding=1, gn=True),
+            nn.MaxPool2d(kernel_size=2),
+            conv_block(in_features=32, out_features=64, padding=1, gn=True),
+            conv_block(in_features=64, out_features=64, padding=1, gn=True),
+            nn.MaxPool2d(kernel_size=2),
+            conv_block(in_features=64, out_features=128, padding=1, gn=True),
+            conv_block(in_features=128, out_features=128, padding=1, gn=True),
+            nn.MaxPool2d(kernel_size=2),
+            conv_block(in_features=128, out_features=256, padding=1, gn=True),
+            conv_block(in_features=256, out_features=256, padding=1, gn=True),
+            nn.MaxPool2d(kernel_size=2),
+
+        )
+
+        num_features_before_fcnn = functools.reduce(
+            operator.mul,
+            list(self.feature_extractor(torch.rand(1, *input_dim)).shape))
+
+        self.classifier = nn.Sequential(
+            nn.Linear(in_features=num_features_before_fcnn, out_features=512),
+            nn.ReLU(inplace=True),
+            nn.Linear(in_features=512, out_features=256),
+            nn.ReLU(inplace=True),
+            nn.Linear(in_features=256, out_features=out_channels),
+
+        )
+
+    def forward(self, x):
+        batch_size = x.size(0)
+
+        out = self.feature_extractor(x)
+        out = out.view(batch_size, -1)  # flatten the vector
+        out = self.classifier(out)
+        return out
+
+
+class conv_block(BaseModel):
+    def __init__(self, in_features, out_features, padding, kernel_size=3, gn=None):
+        nn.Module.__init__(self)
+        self.gn = gn
+        self.conv = nn.Conv2d(in_features, out_features, kernel_size=kernel_size, stride=1, padding=padding)
+        self.group_norm = nn.GroupNorm(32, out_features)
+        self.relu = nn.ReLU()
+
+    def forward(self, x):
+        x = self.conv(x)
+        if self.gn is not None:
+            x = self.group_norm(x)
+        x = self.relu(x)
+        return x

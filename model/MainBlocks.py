@@ -10,10 +10,12 @@ import torch
 import torch.nn as nn
 
 
+######### XNET #########
 class conv_block(BaseModel):
-    def __init__(self, in_features, out_features, kernel_size=3, padding=1, norm_type=None):
+    def __init__(self, in_features, out_features, kernel_size=3, padding=1, dilation=1, norm_type=None):
         nn.Module.__init__(self)
-        self.conv = nn.Conv2d(in_features, out_features, kernel_size=kernel_size, stride=1, padding=padding)
+        self.conv = nn.Conv2d(in_features, out_features, kernel_size=kernel_size, stride=1, padding=padding,
+                              dilation=dilation)
         self.norm_type = norm_type
         if self.norm_type == 'gn':
             self.norm = nn.GroupNorm(32 if out_features >= 32 else out_features, out_features)
@@ -48,7 +50,7 @@ class DSconv_block(BaseModel):
         self.norm_type = norm_type
         self.DSconv = DepthWiseConv2D(in_features)
         if self.norm_type == 'gn':
-            self.norm = nn.GroupNorm(32 if in_features >= 32 else in_features, in_features)
+            self.norm = nn.GroupNorm(32 if (in_features >= 32 and in_features % 32 == 0) else in_features, in_features)
         if self.norm_type == 'bn':
             self.norm = nn.BatchNorm2d(in_features)
         self.relu = nn.ReLU()
@@ -105,7 +107,7 @@ class FSM(BaseModel):
         phi = torch.reshape(phi, (batchsize, -1, intermediate_dim))
 
         f = torch.bmm(theta, phi.view(batchsize, intermediate_dim, phi.shape[1]))
-        f = f / (float(f.shape[1]))
+        f = f / (float(f.shape[-1]))
 
         g = nn.Conv2d(int(channel_num // 8), intermediate_dim, kernel_size=1, padding=0, bias=False).to(self.device)(ip)
         g = torch.reshape(g, (batchsize, -1, intermediate_dim))
@@ -121,13 +123,16 @@ class FSM(BaseModel):
         return x
 
 
+######### ResUnet & ResUnetPlus #########
+
 class ResConv(BaseModel):
     def __init__(self, in_features, out_features, kernel_size=3, padding=1, stride=1, norm_type=None):
         nn.Module.__init__(self)
         self.norm_type = norm_type
         if self.norm_type == 'gn':
-            self.norm1 = nn.GroupNorm(32 if (in_features >= 32 and in_features%32==0) else in_features, in_features)
-            self.norm2 = nn.GroupNorm(32 if (out_features >= 32 and out_features%32==0) else out_features, out_features)
+            self.norm1 = nn.GroupNorm(32 if (in_features >= 32 and in_features % 32 == 0) else in_features, in_features)
+            self.norm2 = nn.GroupNorm(32 if (out_features >= 32 and out_features % 32 == 0) else out_features,
+                                      out_features)
 
         if self.norm_type == 'bn':
             self.norm1 = nn.BatchNorm2d(in_features)
@@ -138,7 +143,7 @@ class ResConv(BaseModel):
                                   nn.Conv2d(in_channels=in_features, out_channels=out_features,
                                             kernel_size=kernel_size, stride=stride, padding=padding),
                                   self.norm2,
-                                  nn.ReLU(),
+                                  nn.ReLU(inplace=True),
                                   nn.Conv2d(in_channels=out_features, out_channels=out_features,
                                             kernel_size=kernel_size, stride=1, padding=1))
         self.skip = nn.Sequential(nn.Conv2d(in_channels=in_features, out_channels=out_features, kernel_size=kernel_size,
@@ -150,3 +155,81 @@ class ResConv(BaseModel):
         x = self.pack(x)
         x += res
         return x
+
+
+class SqueezeExciteBlock(BaseModel):
+    def __init__(self, in_features, reduction=16):
+        nn.Module.__init__(self)
+        self.avgpool = nn.AvgPool2d(1)
+        self.fc = nn.Sequential(nn.Linear(in_features, int(in_features // reduction), bias=False),
+                                nn.ReLU(inplace=True),
+                                nn.Linear(int(in_features // reduction), in_features, bias=False),
+                                nn.Sigmoid())
+
+    def forward(self, x):
+        b, c, _, _ = x.size()
+        y = self.avg_pool(x).view(b, c)
+        y = self.fc(y).view(b, c, 1, 1)
+        return x * y.expand_as(x)
+
+
+class ASSP(BaseModel):
+    def __init__(self, in_features, out_features, norm_type, rate=[6, 12, 18]):
+        nn.Module.__init__(self)
+        self.block1 = conv_block(
+            in_features=in_features,
+            out_features=out_features,
+            padding=rate[0],
+            dilation=rate[0],
+            norm_type=norm_type)
+        self.block2 = conv_block(
+            in_features=in_features,
+            out_features=out_features,
+            padding=rate[1],
+            dilation=rate[1],
+            norm_type=norm_type)
+        self.block3 = conv_block(
+            in_features=in_features,
+            out_features=out_features,
+            padding=rate[2],
+            dilation=rate[2],
+            norm_type=norm_type)
+        self.out = nn.Conv2d(
+            in_channels=int(len(rate) * out_features),
+            out_channels=out_features,
+            kernel_size=1)
+
+    def forward(self, x):
+        x1 = self.block1(x)
+        x2 = self.block1(x)
+        x3 = self.block1(x)
+        x = self.out(torch.cat((x1, x2, x3), dim=1))
+        return x
+
+
+class AttentionBlock(BaseModel):
+    def __init__(self, input_encoder, input_decoder, output_dim):
+        nn.Module.__init__(self)
+        self.conv_encoder = nn.Sequential(
+            nn.BatchNorm2d(input_encoder),
+            nn.ReLU(),
+            nn.Conv2d(input_encoder, output_dim, 3, padding=1),
+            nn.MaxPool2d(2, 2),
+        )
+
+        self.conv_decoder = nn.Sequential(
+            nn.BatchNorm2d(input_decoder),
+            nn.ReLU(),
+            nn.Conv2d(input_decoder, output_dim, 3, padding=1),
+        )
+
+        self.conv_attn = nn.Sequential(
+            nn.BatchNorm2d(output_dim),
+            nn.ReLU(),
+            nn.Conv2d(output_dim, 1, 1),
+        )
+
+    def forward(self, x1, x2):
+        out = self.conv_encoder(x1) + self.conv_decoder(x2)
+        out = self.conv_attn(out)
+        return out * x2

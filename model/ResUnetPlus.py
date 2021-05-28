@@ -8,7 +8,7 @@
 from berries.model.base import BaseModel
 import torch
 import torch.nn as nn
-from model.MainBlocks import conv_block, ResConv, AttentionBlock, ASSP, SqueezeExciteBlock
+from model.MainBlocks import conv_block, ResConv, AttentionBlock, ASPP, SqueezeExciteBlock
 
 
 class ResUnetPlus(BaseModel):
@@ -22,33 +22,33 @@ class ResUnetPlus(BaseModel):
             nn.Conv2d(in_features, int(32 * k), kernel_size=3, padding=1)
         )
 
-        self.squeeze_excite1 = Squeeze_Excite_Block(int(32 * k))
+        self.squeeze_excite1 = SqueezeExciteBlock(int(32 * k), reduction=int(16 * k))
 
         self.residual_conv1 = ResConv(int(32 * k), int(64 * k), stride=2, padding=1, norm_type=norm_type)
 
-        self.squeeze_excite2 = Squeeze_Excite_Block(int(64 * k))
+        self.squeeze_excite2 = SqueezeExciteBlock(int(64 * k), reduction=int(16 * k))
 
         self.residual_conv2 = ResConv(int(64 * k), int(128 * k), stride=2, padding=1, norm_type=norm_type)
 
-        self.squeeze_excite3 = Squeeze_Excite_Block(int(128 * k))
+        self.squeeze_excite3 = SqueezeExciteBlock(int(128 * k), reduction=int(16 * k))
 
         self.residual_conv3 = ResConv(int(128 * k), int(256 * k), stride=2, padding=1, norm_type=norm_type)
 
-        self.aspp_bridge = ASPP(int(256 * k), int(512 * k))
+        self.aspp_bridge = ASPP(int(256 * k), int(512 * k), norm_type=norm_type)
 
-        self.attn1 = AttentionBlock(int(128 * k), int(512 * k), int(512 * k))
+        self.attn1 = AttentionBlock(int(128 * k), int(512 * k), int(512 * k), norm_type=norm_type)
         self.upsample1 = nn.Upsample(scale_factor=2, mode=upsample_type)
         self.up_residual_conv1 = ResConv(int(512 * k) + int(128 * k), int(256 * k), norm_type=norm_type)
 
-        self.attn2 = AttentionBlock(int(64 * k), int(256 * k), int(256 * k))
+        self.attn2 = AttentionBlock(int(64 * k), int(256 * k), int(256 * k), norm_type=norm_type)
         self.upsample2 = nn.Upsample(scale_factor=2, mode=upsample_type)
         self.up_residual_conv2 = ResConv(int(256 * k) + int(64 * k), int(128 * k), norm_type=norm_type)
 
-        self.attn3 = AttentionBlock(int(32 * k), int(128 * k), int(128 * k))
+        self.attn3 = AttentionBlock(int(32 * k), int(128 * k), int(128 * k), norm_type=norm_type)
         self.upsample3 = nn.Upsample(scale_factor=2, mode=upsample_type)
         self.up_residual_conv3 = ResConv(int(128 * k) + int(32 * k), int(64 * k), norm_type=norm_type)
 
-        self.aspp_out = ASPP(int(64 * k), int(32 * k))
+        self.aspp_out = ASPP(int(64 * k), int(32 * k), norm_type=norm_type)
 
         self.output_layer = nn.Conv2d(int(32 * k), out_features, kernel_size=1)
 
@@ -102,11 +102,12 @@ class ResUnetPlus(BaseModel):
 def test(batchsize):
     in_channels = 3
     in1 = torch.rand(batchsize, in_channels, 512, 512).to('cuda')
-    model = ResUnetPlus(in_features=in_channels, out_features=3, k=0.25, norm_type='gn').to('cuda')
+    model = ResUnetPlus(in_features=in_channels, out_features=3, k=0.25, norm_type='bn').to('cuda')
 
     out1 = model(in1)
-    return out1.shape
+    pytorch_total_params = sum(p.numel() for p in model.parameters())
+
+    return out1.shape, pytorch_total_params
 
 
 test(batchsize=8)
-pytorch_total_params = sum(p.numel() for p in model.parameters())

@@ -160,7 +160,7 @@ class ResConv(BaseModel):
 class SqueezeExciteBlock(BaseModel):
     def __init__(self, in_features, reduction=16):
         nn.Module.__init__(self)
-        self.avgpool = nn.AvgPool2d(1)
+        self.avgpool = nn.AdaptiveAvgPool2d(1)
         self.fc = nn.Sequential(nn.Linear(in_features, int(in_features // reduction), bias=False),
                                 nn.ReLU(inplace=True),
                                 nn.Linear(int(in_features // reduction), in_features, bias=False),
@@ -168,12 +168,12 @@ class SqueezeExciteBlock(BaseModel):
 
     def forward(self, x):
         b, c, _, _ = x.size()
-        y = self.avg_pool(x).view(b, c)
+        y = self.avgpool(x).view(b, c)
         y = self.fc(y).view(b, c, 1, 1)
         return x * y.expand_as(x)
 
 
-class ASSP(BaseModel):
+class ASPP(BaseModel):
     def __init__(self, in_features, out_features, norm_type, rate=[6, 12, 18]):
         nn.Module.__init__(self)
         self.block1 = conv_block(
@@ -208,23 +208,36 @@ class ASSP(BaseModel):
 
 
 class AttentionBlock(BaseModel):
-    def __init__(self, input_encoder, input_decoder, output_dim):
+    def __init__(self, input_encoder, input_decoder, output_dim, norm_type):
         nn.Module.__init__(self)
+        if norm_type == 'gn':
+            self.norm1 = nn.GroupNorm(32 if (input_encoder >= 32 and input_encoder % 32 == 0) else input_encoder,
+                                      input_encoder)
+            self.norm2 = nn.GroupNorm(32 if (input_decoder >= 32 and input_decoder % 32 == 0) else input_decoder,
+                                      input_decoder)
+            self.norm3 = nn.GroupNorm(32 if (output_dim >= 32 and output_dim % 32 == 0) else output_dim,
+                                      output_dim)
+
+        if norm_type == 'bn':
+            self.norm1 = nn.BatchNorm2d(input_encoder)
+            self.norm2 = nn.BatchNorm2d(input_decoder)
+            self.norm3 = nn.BatchNorm2d(output_dim)
+
         self.conv_encoder = nn.Sequential(
-            nn.BatchNorm2d(input_encoder),
+            self.norm1,
             nn.ReLU(),
             nn.Conv2d(input_encoder, output_dim, 3, padding=1),
             nn.MaxPool2d(2, 2),
         )
 
         self.conv_decoder = nn.Sequential(
-            nn.BatchNorm2d(input_decoder),
+            self.norm2,
             nn.ReLU(),
             nn.Conv2d(input_decoder, output_dim, 3, padding=1),
         )
 
         self.conv_attn = nn.Sequential(
-            nn.BatchNorm2d(output_dim),
+            self.norm3,
             nn.ReLU(),
             nn.Conv2d(output_dim, 1, 1),
         )

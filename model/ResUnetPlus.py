@@ -8,7 +8,9 @@
 from berries.model.base import BaseModel
 import torch
 import torch.nn as nn
+
 from model.MainBlocks import conv_block, ResConv, AttentionBlock, ResUASPP, SqueezeExciteBlock
+
 
 
 class ResUnetPlus(BaseModel):
@@ -36,6 +38,7 @@ class ResUnetPlus(BaseModel):
 
         self.aspp_bridge = ResUASPP(int(256 * k), int(512 * k), norm_type=norm_type)
 
+
         self.attn1 = AttentionBlock(int(128 * k), int(512 * k), int(512 * k), norm_type=norm_type)
         self.upsample1 = nn.Upsample(scale_factor=2, mode=upsample_type)
         self.up_residual_conv1 = ResConv(int(512 * k) + int(128 * k), int(256 * k), norm_type=norm_type)
@@ -52,6 +55,7 @@ class ResUnetPlus(BaseModel):
 
         self.output_layer = nn.Conv2d(int(32 * k), out_features, kernel_size=(1, 1))
         self.initialize_weights()
+
 
     def forward(self, x):
         x1 = self.input_layer(x) + self.input_skip(x)
@@ -98,10 +102,12 @@ class ResUnetPlus(BaseModel):
                 m.weight.data.fill_(1)
                 if m.bias is not None:
                     m.bias.data.zero_()
+                    
             if isinstance(m, nn.Linear):
                 nn.init.kaiming_normal_(m.weight)
                 if m.bias is not None:
                     nn.init.constant_(m.bias, 0)
+
 
 
 def test(batchsize):

@@ -24,6 +24,7 @@ class conv_block(BaseModel):
         nn.Module.__init__(self)
         self.conv = nn.Conv2d(in_features, out_features, kernel_size=kernel_size, stride=1, padding=padding,
                               dilation=dilation, bias=use_bias)
+
         self.norm_type = norm_type
         if self.norm_type == 'gn':
             self.norm = nn.GroupNorm(32 if out_features >= 32 else out_features, out_features)
@@ -191,6 +192,7 @@ class ResUASPP(BaseModel):
     def __init__(self, in_features, out_features, norm_type, rate=[6, 12, 18]):
         nn.Module.__init__(self)
 
+
         self.block1 = conv_block(
             in_features=in_features,
             out_features=out_features,
@@ -217,8 +219,10 @@ class ResUASPP(BaseModel):
 
     def forward(self, x):
         x1 = self.block1(x)
+
         x2 = self.block2(x)
         x3 = self.block3(x)
+
         x = self.out(torch.cat((x1, x2, x3), dim=1))
         return x
 

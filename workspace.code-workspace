@@ -7,5 +7,7 @@
 			"path": "..\\berries"
 		}
 	],
-	"settings": {}
+	"settings": {
+		"python.pythonPath": "C:\\Users\\ugur\\Anaconda3\\envs\\stroke\\python.exe"
+	}
 }

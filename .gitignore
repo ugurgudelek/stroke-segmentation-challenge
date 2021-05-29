@@ -1,8 +1,17 @@
-projects/
-input/
-
+# IDE
 .vscode/
 .idea/
+.ipynb_checkpoints/
 
+# pycache files
 *.pyc
+__*__
+
+# neptune-ai
 .neptune/
+
+# big files
+projects/
+input/
+export/
+workspace.code-workspace

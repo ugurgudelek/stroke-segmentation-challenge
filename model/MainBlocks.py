@@ -10,13 +10,20 @@ import torch
 import torch.nn as nn
 
 
+class Identity(nn.Module):
+    def __init__(self):
+        super(Identity, self).__init__()
+
+    def forward(self, x):
+        return x
+
 
 ######### XNET #########
 class conv_block(BaseModel):
-    def __init__(self, in_features, out_features, kernel_size=3, padding=1, dilation=1, norm_type=None):
+    def __init__(self, in_features, out_features, kernel_size=3, padding=1, dilation=1, norm_type=None, use_bias=True):
         nn.Module.__init__(self)
         self.conv = nn.Conv2d(in_features, out_features, kernel_size=kernel_size, stride=1, padding=padding,
-                              dilation=dilation)
+                              dilation=dilation, bias=use_bias)
 
         self.norm_type = norm_type
         if self.norm_type == 'gn':
@@ -181,9 +188,11 @@ class SqueezeExciteBlock(BaseModel):
         return x * y.expand_as(x)
 
 
-class ASPP(BaseModel):
+class ResUASPP(BaseModel):
     def __init__(self, in_features, out_features, norm_type, rate=[6, 12, 18]):
         nn.Module.__init__(self)
+
+
         self.block1 = conv_block(
             in_features=in_features,
             out_features=out_features,
@@ -202,6 +211,7 @@ class ASPP(BaseModel):
             padding=rate[2],
             dilation=rate[2],
             norm_type=norm_type)
+
         self.out = nn.Conv2d(
             in_channels=int(len(rate) * out_features),
             out_channels=out_features,
@@ -209,8 +219,10 @@ class ASPP(BaseModel):
 
     def forward(self, x):
         x1 = self.block1(x)
-        x2 = self.block1(x)
-        x3 = self.block1(x)
+
+        x2 = self.block2(x)
+        x3 = self.block3(x)
+
         x = self.out(torch.cat((x1, x2, x3), dim=1))
         return x
 
@@ -255,3 +267,65 @@ class AttentionBlock(BaseModel):
         out = self.conv_attn(out)
         return out * x2
 
+
+########## DoubleUnet ###############
+
+class DoubleASPP(BaseModel):
+    def __init__(self, in_features, out_features, norm_type, rate=[1, 6, 12, 18], device='cuda'):
+        nn.Module.__init__(self)
+        self.device = device
+        self.block0 = conv_block(
+            in_features=in_features,
+            out_features=out_features,
+            kernel_size=1,
+            padding=0,
+            dilation=1,
+            norm_type=norm_type,
+            use_bias=False)
+        self.block1 = conv_block(
+            in_features=in_features,
+            out_features=out_features,
+            kernel_size=1,
+            padding=rate[0],
+            dilation=rate[0],
+            norm_type=norm_type,
+            use_bias=False)
+        self.block2 = conv_block(
+            in_features=in_features,
+            out_features=out_features,
+            padding=rate[1],
+            dilation=rate[1],
+            norm_type=norm_type,
+            use_bias=False)
+        self.block3 = conv_block(
+            in_features=in_features,
+            out_features=out_features,
+            padding=rate[1],
+            dilation=rate[1],
+            norm_type=norm_type,
+            use_bias=False)
+        self.block4 = conv_block(
+            in_features=in_features,
+            out_features=out_features,
+            padding=rate[1],
+            dilation=rate[1],
+            norm_type=norm_type,
+            use_bias=False)
+
+        self.out = conv_block(
+            in_features=int(len(rate) * out_features),
+            out_features=out_features,
+            kernel_size=1,
+            padding=0,
+            use_bias=False)
+
+    def forward(self, x):
+        x1 = nn.AvgPool2d(kernel_size=(x.shape[2], x.shape[3])).to(self.device)(x)
+        x1 = self.block0(x1)
+        x1 = nn.Upsample(size=(x.shape[2], x.shape[3]), mode='bilinear').to(self.device)(x1)
+        x2 = self.block1(x)
+        x3 = self.block2(x)
+        x4 = self.block3(x)
+        x5 = self.block4(x)
+        x6 = self.out(torch.cat((x1, x2, x3, x4, x5), dim=1))
+        return x6

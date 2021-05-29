@@ -12,7 +12,7 @@ from model.MainBlocks import conv_block, DepthWiseConv2D, DSconv_block, x_block,
 
 
 class XNET(BaseModel):
-    def __init__(self, in_channels, out_channels, device, k=1,  norm_type='bn', upsample_mode='nearest'):
+    def __init__(self, in_channels, out_channels, device, k=1, norm_type='bn', upsample_mode='nearest'):
         nn.Module.__init__(self)
         self.upsample = nn.Upsample(scale_factor=2, mode=upsample_mode)
         self.maxpool = nn.MaxPool2d(kernel_size=2)
@@ -82,4 +82,6 @@ def test(batchsize):
     out1 = model(in1)
     return out1.shape
 
+
 test(batchsize=4)
+# pytorch_total_params = sum(p.numel() for p in model.parameters())

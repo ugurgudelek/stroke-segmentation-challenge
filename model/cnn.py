@@ -233,12 +233,20 @@ class conv_block(BaseModel):
         nn.Module.__init__(self)
         self.gn = gn
         self.conv = nn.Conv2d(in_features, out_features, kernel_size=kernel_size, stride=1, padding=padding)
-        self.group_norm = nn.GroupNorm(32, out_features)
+        self.norm = nn.GroupNorm(32, out_features)
         self.relu = nn.ReLU()
 
     def forward(self, x):
         x = self.conv(x)
         if self.gn is not None:
-            x = self.group_norm(x)
+            x = self.norm(x)
         x = self.relu(x)
         return x
+
+
+# model = torchvision.models.vgg19_bn(pretrained=True)
+# n_feats = 1 #   whatever is your number of output features
+# last_item_index = len(model.classifier)-1
+# old_fc = model.classifier.__getitem__(last_item_index )
+# new_fc = nn.Linear(in_features=old_fc.in_features, out_features= n_feats, bias=True)
+# model.classifier.__setitem__(last_item_index , new_fc)

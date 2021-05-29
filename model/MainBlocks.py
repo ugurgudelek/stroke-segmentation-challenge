@@ -10,12 +10,14 @@ import torch
 import torch.nn as nn
 
 
+
 ######### XNET #########
 class conv_block(BaseModel):
     def __init__(self, in_features, out_features, kernel_size=3, padding=1, dilation=1, norm_type=None):
         nn.Module.__init__(self)
         self.conv = nn.Conv2d(in_features, out_features, kernel_size=kernel_size, stride=1, padding=padding,
                               dilation=dilation)
+
         self.norm_type = norm_type
         if self.norm_type == 'gn':
             self.norm = nn.GroupNorm(32 if out_features >= 32 else out_features, out_features)
@@ -51,6 +53,7 @@ class DSconv_block(BaseModel):
         self.DSconv = DepthWiseConv2D(in_features)
         if self.norm_type == 'gn':
             self.norm = nn.GroupNorm(32 if (in_features >= 32 and in_features % 32 == 0) else in_features, in_features)
+
         if self.norm_type == 'bn':
             self.norm = nn.BatchNorm2d(in_features)
         self.relu = nn.ReLU()
@@ -109,6 +112,7 @@ class FSM(BaseModel):
         f = torch.bmm(theta, phi.view(batchsize, intermediate_dim, phi.shape[1]))
         f = f / (float(f.shape[-1]))
 
+
         g = nn.Conv2d(int(channel_num // 8), intermediate_dim, kernel_size=1, padding=0, bias=False).to(self.device)(ip)
         g = torch.reshape(g, (batchsize, -1, intermediate_dim))
 
@@ -123,7 +127,9 @@ class FSM(BaseModel):
         return x
 
 
+
 ######### ResUnet & ResUnetPlus #########
+
 
 class ResConv(BaseModel):
     def __init__(self, in_features, out_features, kernel_size=3, padding=1, stride=1, norm_type=None):
@@ -133,6 +139,7 @@ class ResConv(BaseModel):
             self.norm1 = nn.GroupNorm(32 if (in_features >= 32 and in_features % 32 == 0) else in_features, in_features)
             self.norm2 = nn.GroupNorm(32 if (out_features >= 32 and out_features % 32 == 0) else out_features,
                                       out_features)
+
 
         if self.norm_type == 'bn':
             self.norm1 = nn.BatchNorm2d(in_features)
@@ -144,6 +151,7 @@ class ResConv(BaseModel):
                                             kernel_size=kernel_size, stride=stride, padding=padding),
                                   self.norm2,
                                   nn.ReLU(inplace=True),
+
                                   nn.Conv2d(in_channels=out_features, out_channels=out_features,
                                             kernel_size=kernel_size, stride=1, padding=1))
         self.skip = nn.Sequential(nn.Conv2d(in_channels=in_features, out_channels=out_features, kernel_size=kernel_size,
@@ -246,3 +254,4 @@ class AttentionBlock(BaseModel):
         out = self.conv_encoder(x1) + self.conv_decoder(x2)
         out = self.conv_attn(out)
         return out * x2
+

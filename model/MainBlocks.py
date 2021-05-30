@@ -119,7 +119,6 @@ class FSM(BaseModel):
         f = torch.bmm(theta, phi.view(batchsize, intermediate_dim, phi.shape[1]))
         f = f / (float(f.shape[-1]))
 
-
         g = nn.Conv2d(int(channel_num // 8), intermediate_dim, kernel_size=1, padding=0, bias=False).to(self.device)(ip)
         g = torch.reshape(g, (batchsize, -1, intermediate_dim))
 
@@ -134,7 +133,6 @@ class FSM(BaseModel):
         return x
 
 
-
 ######### ResUnet & ResUnetPlus #########
 
 
@@ -146,7 +144,6 @@ class ResConv(BaseModel):
             self.norm1 = nn.GroupNorm(32 if (in_features >= 32 and in_features % 32 == 0) else in_features, in_features)
             self.norm2 = nn.GroupNorm(32 if (out_features >= 32 and out_features % 32 == 0) else out_features,
                                       out_features)
-
 
         if self.norm_type == 'bn':
             self.norm1 = nn.BatchNorm2d(in_features)
@@ -191,7 +188,6 @@ class SqueezeExciteBlock(BaseModel):
 class ResUASPP(BaseModel):
     def __init__(self, in_features, out_features, norm_type, rate=[6, 12, 18]):
         nn.Module.__init__(self)
-
 
         self.block1 = conv_block(
             in_features=in_features,
@@ -268,7 +264,7 @@ class AttentionBlock(BaseModel):
         return out * x2
 
 
-########## DoubleUnet ###############
+############### DoubleUnet ###############
 
 class DoubleASPP(BaseModel):
     def __init__(self, in_features, out_features, norm_type, rate=[1, 6, 12, 18], device='cuda'):
@@ -329,3 +325,92 @@ class DoubleASPP(BaseModel):
         x5 = self.block4(x)
         x6 = self.out(torch.cat((x1, x2, x3, x4, x5), dim=1))
         return x6
+
+############### R2AttNet ###############
+
+
+class R2_Attention_block(BaseModel):
+    def __init__(self, input_encoder, input_decoder, output_dim, norm_type):
+        nn.Module.__init__(self)
+        if norm_type == 'gn':
+            self.norm1 = nn.GroupNorm(32 if (output_dim >= 32 and output_dim % 32 == 0) else output_dim,
+                                      output_dim)
+            self.norm2 = nn.GroupNorm(32 if (output_dim >= 32 and output_dim % 32 == 0) else output_dim,
+                                      output_dim)
+            self.norm3 = nn.GroupNorm(1, 1)
+
+        if norm_type == 'bn':
+            self.norm1 = nn.BatchNorm2d(output_dim)
+            self.norm2 = nn.BatchNorm2d(output_dim)
+            self.norm3 = nn.BatchNorm2d(1)
+
+        self.W_g = nn.Sequential(
+            nn.Conv2d(input_encoder, output_dim, kernel_size=1, stride=1, padding=0, bias=True),
+            self.norm1
+        )
+
+        self.W_x = nn.Sequential(
+            nn.Conv2d(input_decoder, output_dim, kernel_size=1, stride=1, padding=0, bias=True),
+            self.norm2
+        )
+
+        self.psi = nn.Sequential(
+            nn.Conv2d(output_dim, 1, kernel_size=1, stride=1, padding=0, bias=True),
+            self.norm3,
+            nn.Sigmoid()
+        )
+
+        self.relu = nn.ReLU(inplace=True)
+
+    def forward(self, g, x):
+        g1 = self.W_g(g)
+        x1 = self.W_x(x)
+        psi = self.relu(g1 + x1)
+        psi = self.psi(psi)
+
+        return x * psi
+
+
+class up_conv(BaseModel):
+    def __init__(self, ch_in, ch_out, norm_type):
+        nn.Module.__init__(self)
+        self.up = nn.Sequential(
+            nn.Upsample(scale_factor=2),
+            conv_block(in_features=ch_in, out_features=ch_out, norm_type=norm_type)
+        )
+
+    def forward(self, x):
+        x = self.up(x)
+        return x
+
+
+class Recurrent_block(BaseModel):
+    def __init__(self, ch_out, norm_type, t=2):
+        nn.Module.__init__(self)
+        self.t = t
+        self.ch_out = ch_out
+        self.conv = conv_block(in_features=ch_out, out_features=ch_out, norm_type=norm_type)
+
+    def forward(self, x):
+        for i in range(self.t):
+
+            if i == 0:
+                x1 = self.conv(x)
+
+            x1 = self.conv(x + x1)
+        return x1
+
+
+class RRCNN_block(BaseModel):
+    def __init__(self, ch_in, ch_out, norm_type, t=2):
+        nn.Module.__init__(self)
+        self.RCNN = nn.Sequential(
+            Recurrent_block(ch_out, t=t, norm_type=norm_type),
+            Recurrent_block(ch_out, t=t, norm_type=norm_type)
+        )
+        self.Conv_1x1 = nn.Conv2d(ch_in, ch_out, kernel_size=1,stride=1,padding=0)
+
+    def forward(self,x):
+        x = self.Conv_1x1(x)
+        x1 = self.RCNN(x)
+        return x+x1

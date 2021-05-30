@@ -37,7 +37,9 @@ class StrokeExperiment(Experiment):
             'resume': True,
             'pretrained': False,
             'checkpoint': {
-                'on_epoch': 2,
+                'on_epoch': 1000,
+                'metric': local_metrics..__name__.lower(),
+                'trigger': lambda new, old: new > old
             },
             'log': {
                 'on_epoch': 1,

@@ -169,11 +169,11 @@ class StrokeClassificationTorch(BaseTorchDataset):
     def __getitem__(self, ix):
         image = self.images[ix]
         label = self.targets[ix]
-        image = torch.as_tensor(image, dtype=torch.float32) / 255.  # delete
+        # image = torch.as_tensor(image, dtype=torch.float32) / 255.  # delete
         # Transform images
         if self.transform is not None:
-            # image = self.transform(image=image)['image'] # true
-            image = self.transform(image)  # delete
+            image = self.transform(image=image)['image'] # true
+            # image = self.transform(image)  # delete
         label = torch.as_tensor(label, dtype=torch.long)
 
         return {'data': image, 'target': label}

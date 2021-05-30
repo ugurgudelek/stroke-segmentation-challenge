@@ -43,7 +43,7 @@ class IoULoss(torch.nn.Module):
         jacc_loss = (intersection / (union + eps)).mean()
         return 1 - jacc_loss
 
-
+      
 class TrevskyLoss(torch.nn.Module):
     def __init__(self, num_classes=3, reduction='mean'):
         super(TrevskyLoss, self).__init__()

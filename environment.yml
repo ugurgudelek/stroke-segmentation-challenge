@@ -25,3 +25,5 @@ dependencies:
   - yapf
   - pip
   - neptune-client
+  - imgaug
+  - albumentations

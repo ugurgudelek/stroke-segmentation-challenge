@@ -15,6 +15,9 @@ from tqdm import tqdm
 import torch
 from sklearn.model_selection import train_test_split
 
+import albumentations as A
+import albumentations.pytorch as Ap
+
 from berries.datasets.base import BaseTorchDataset
 
 
@@ -127,7 +130,7 @@ class Stroke:
                 img = img.crop((left, top, right, bottom))
 
             img = np.asarray(img)
-            img = np.transpose(img, (2, 0, 1))
+            img = np.transpose(img, (2, 0, 1))  # channel, width, height
             images[img_id] = np.asarray(img)
 
         return images
@@ -164,22 +167,23 @@ class StrokeClassificationTorch(BaseTorchDataset):
         self.transform = transform
 
     def __getitem__(self, ix):
-        x = self.images[ix]
-        y = self.targets[ix]
+        image = self.images[ix]
+        label = self.targets[ix]
 
         # Transform images
-        x = torch.as_tensor(x, dtype=torch.float32) / 255.
-        y = torch.as_tensor(y, dtype=torch.long)
         if self.transform is not None:
-            x = self.transform(x)
+            image = self.transform(image=image)['image']
+        label = torch.as_tensor(label, dtype=torch.long)
 
-        return {'data': x, 'target': y}
+        return {'data': image, 'target': label}
 
     def __len__(self):
         return len(self.targets)
 
 
 class StrokeSegmentationDataset:
+    # KANAMA: channel Green - 1
+    # ISKEMI: channel Blue  - 2
     def __init__(self, root, transform=None, test_size=0.8):
         self.root = root  # Path('./input/stroke')
 
@@ -213,12 +217,10 @@ class StrokeSegmentationTorch(BaseTorchDataset):
         image = self.images[ix]
         mask = self.masks[ix]
 
-        # Transform images
-        image = torch.as_tensor(image, dtype=torch.float32) / 255.
-        mask = torch.as_tensor(mask, dtype=torch.float32) / 255.
-
         if self.transform is not None:
-            image = self.transform(image)
+            sample = self.transform(image=image, mask=mask)
+            image = sample['image']
+            mask = sample['mask']
 
         return {'data': image, 'target': mask}
 
@@ -230,4 +232,21 @@ if __name__ == '__main__':
 
     # Stroke(root=Path('./input/stroke')).for_classification()
     # Stroke(root=Path('./input/stroke')).for_segmentation()
-    StrokeSegmentationDataset(root=Path('./input/stroke'), test_size=0.2)
+
+    # Declare an augmentation pipeline
+    transform = A.Compose([
+        A.ShiftScaleRotate(shift_limit=0.05,
+                           scale_limit=0.05,
+                           rotate_limit=15,
+                           p=0.5),
+        A.HorizontalFlip(p=0.5),
+        A.RandomBrightnessContrast(p=0.2),
+        Ap.ToTensor()
+    ])
+
+    d = StrokeSegmentationDataset(root=Path('./input/stroke'),
+                                  test_size=0.2,
+                                  transform=transform)
+
+    sample = d.trainset[10]
+    print()

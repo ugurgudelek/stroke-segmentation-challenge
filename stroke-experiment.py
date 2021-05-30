@@ -14,7 +14,7 @@ from berries.experiments.experiment import Experiment
 from berries.metric import metrics
 from berries.logger import MultiLogger
 
-from dataset.stroke_classification import StrokeClassificationDataset
+from dataset.stroke import StrokeClassificationDataset
 from model.cnn import VGG16, VGG19, CNN, DenseNet, ResNet, CustomCNN
 from trainer.demo import DemoTrainer
 from metric import metrics as local_metrics
@@ -26,13 +26,15 @@ class StrokeExperiment(Experiment):
     def __init__(self):
         self.params = {
             'project_name': 'stroke',
-            'experiment_name': 'ResNet-152-WBCE-lr1e-4-bsize-8-pretrained-0-dataaug-2-TL-0',
+            # 'experiment_name': 'ResNet-152-WBCE-lr1e-4-bsize-8-pretrained-0-dataaug-2-TL-0',
+            'experiment_name': 'VGG19_bn-WBCE-lr1e-4-bsize-8-pretrained-0-dataaug-2-TL-0',
+
             # 'project_name': 'debug',
             # 'experiment_name': 'process',
             'seed': 42,
             'device': 'cuda' if torch.cuda.is_available() else 'cpu',
 
-            'resume': False,
+            'resume': True,
             'pretrained': False,
             'checkpoint': {
                 'on_epoch': 2,
@@ -47,10 +49,10 @@ class StrokeExperiment(Experiment):
             },
             'root': Path('./'),
             'neptune': {
-                # 'id': 'STROK-173',
+                'id': 'STROK-184',
                 'workspace': 'machining',
                 'project': 'stroke',
-                'tags': ['Stroke', 'ResNet-152-WBCE-lr1e-4-bsize-8-pretrained-0-dataaug-2-TL-0'],
+                'tags': ['Stroke', 'VGG19_bn-WBCE-lr1e-4-bsize-8-pretrained-0-dataaug-2-TL-0'],
                 'source_files': ['./stroke-experiment.py']
             }
         }
@@ -65,18 +67,20 @@ class StrokeExperiment(Experiment):
 
         self.alpha = 0.333
         # Create netcdf4 file for faster reading
-        # Stroke(root=Path('./input/stroke'))
+        # Stroke(root=Path('./input/stroke')).for_classification()
+        # Stroke(root=Path('./input/stroke')).for_segmentation()
 
-        # self.model = CustomCNN(in_channels=3, out_channels=2, input_dim=(3, 512, 512))
-        # self.model = VGG16(pre_trained=False, req_grad=True, bn=False, out_channels=1, input_dim=(3, 512, 512))
-        # self.model = DenseNet(net_type='densenet-121', pre_trained=False, req_grad=True, out_channels=2,
+        self.model = VGG19(pre_trained=False,
+                           req_grad=True,
+                           bn=True,
+                           out_channels=2,
+                           input_dim=(3, 512, 512))
+
+        # self.model = ResNet(net_type='ResNet-152',
+        #                     pre_trained=False,
+        #                     req_grad=True,
+        #                     out_channels=2,
         #                     input_dim=(3, 512, 512))
-
-        self.model = ResNet(net_type='ResNet-152',
-                            pre_trained=False,
-                            req_grad=True,
-                            out_channels=2,
-                            input_dim=(3, 512, 512))
 
         print(self.model)
 

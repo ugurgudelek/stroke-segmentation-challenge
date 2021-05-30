@@ -45,18 +45,18 @@ class Stroke:
         no_stroke_data = xr.Dataset(data_vars=dict(
             image=(['id', 'c', 'x', 'y'], list(no_stroke_images.values())),
             label=(['id'], [Stroke.CLASSES['no-stroke']] * len(no_stroke_images))),
-                                    coords=dict(id=('id', list(no_stroke_images.keys())),
-                                                x=('x', range(Stroke.WIDTH)),
-                                                y=('y', range(Stroke.HEIGHT)),
-                                                c=('c', ['R', 'G', 'B'])))  # yapf: disable
+            coords=dict(id=('id', list(no_stroke_images.keys())),
+                        x=('x', range(Stroke.WIDTH)),
+                        y=('y', range(Stroke.HEIGHT)),
+                        c=('c', ['R', 'G', 'B'])))  # yapf: disable
 
         stroke_data = xr.Dataset(data_vars=dict(
             image=(['id', 'c', 'x', 'y'], list(stroke_images.values())),
             label=(['id'], [Stroke.CLASSES['stroke']] * len(stroke_images))),
-                                 coords=dict(id=('id', list(stroke_images.keys())),
-                                             x=('x', range(Stroke.WIDTH)),
-                                             y=('y', range(Stroke.HEIGHT)),
-                                             c=('c', ['R', 'G', 'B'])))  # yapf: disable
+            coords=dict(id=('id', list(stroke_images.keys())),
+                        x=('x', range(Stroke.WIDTH)),
+                        y=('y', range(Stroke.HEIGHT)),
+                        c=('c', ['R', 'G', 'B'])))  # yapf: disable
 
         dataset = xr.concat([no_stroke_data, stroke_data], dim='id')
 
@@ -82,10 +82,10 @@ class Stroke:
         hemorrhage_data = xr.Dataset(data_vars=dict(
             image=(['id', 'c', 'x', 'y'], list(hemorrhage_images.values())),
             mask=(['id', 'c', 'x', 'y'], [hemorrhage_masks[key] for key, _ in hemorrhage_images.items()])),
-                                     coords=dict(id=('id', list(hemorrhage_images.keys())),
-                                                 x=('x', range(Stroke.WIDTH)),
-                                                 y=('y', range(Stroke.HEIGHT)),
-                                                 c=('c', ['R', 'G', 'B'])))  # yapf: disable
+            coords=dict(id=('id', list(hemorrhage_images.keys())),
+                        x=('x', range(Stroke.WIDTH)),
+                        y=('y', range(Stroke.HEIGHT)),
+                        c=('c', ['R', 'G', 'B'])))  # yapf: disable
 
         # Read 	ischemia
         ischemia_image_paths = list(
@@ -98,10 +98,10 @@ class Stroke:
         ischemia_data = xr.Dataset(data_vars=dict(
             image=(['id', 'c', 'x', 'y'], list(ischemia_images.values())),
             mask=(['id', 'c', 'x', 'y'], [ischemia_masks[key] for key, _ in ischemia_images.items()])),
-                                     coords=dict(id=('id', list(ischemia_images.keys())),
-                                                 x=('x', range(Stroke.WIDTH)),
-                                                 y=('y', range(Stroke.HEIGHT)),
-                                                 c=('c', ['R', 'G', 'B'])))  # yapf: disable
+            coords=dict(id=('id', list(ischemia_images.keys())),
+                        x=('x', range(Stroke.WIDTH)),
+                        y=('y', range(Stroke.HEIGHT)),
+                        c=('c', ['R', 'G', 'B'])))  # yapf: disable
 
         dataset = xr.concat([hemorrhage_data, ischemia_data], dim='id')
 
@@ -169,10 +169,11 @@ class StrokeClassificationTorch(BaseTorchDataset):
     def __getitem__(self, ix):
         image = self.images[ix]
         label = self.targets[ix]
-
+        image = torch.as_tensor(image, dtype=torch.float32) / 255.  # delete
         # Transform images
         if self.transform is not None:
-            image = self.transform(image=image)['image']
+            # image = self.transform(image=image)['image'] # true
+            image = self.transform(image)  # delete
         label = torch.as_tensor(label, dtype=torch.long)
 
         return {'data': image, 'target': label}
@@ -184,7 +185,7 @@ class StrokeClassificationTorch(BaseTorchDataset):
 class StrokeSegmentationDataset:
     # KANAMA: channel Green - 1
     # ISKEMI: channel Blue  - 2
-    def __init__(self, root, transform=None, test_size=0.8):
+    def __init__(self, root, transform=None, test_size=0.25):
         self.root = root  # Path('./input/stroke')
 
         dataset = xr.open_dataset(self.root / 'nc/stroke-segmentation.nc')
@@ -204,7 +205,7 @@ class StrokeSegmentationDataset:
         self.testset = StrokeSegmentationTorch(
             images=self.test_dataset.image.values,
             masks=self.test_dataset.mask.values,
-            transform=transform)
+            transform=None)
 
 
 class StrokeSegmentationTorch(BaseTorchDataset):
@@ -222,6 +223,9 @@ class StrokeSegmentationTorch(BaseTorchDataset):
             image = sample['image']
             mask = sample['mask']
 
+            image = self.transform(image)
+            mask = self.transform(mask)
+
         return {'data': image, 'target': mask}
 
     def __len__(self):
@@ -229,7 +233,6 @@ class StrokeSegmentationTorch(BaseTorchDataset):
 
 
 if __name__ == '__main__':
-
     # Stroke(root=Path('./input/stroke')).for_classification()
     # Stroke(root=Path('./input/stroke')).for_segmentation()
 
@@ -250,3 +253,5 @@ if __name__ == '__main__':
 
     sample = d.trainset[10]
     print()
+
+    StrokeSegmentationDataset(root=Path('./input/stroke'), test_size=0.25)

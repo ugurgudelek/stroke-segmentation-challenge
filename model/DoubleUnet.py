@@ -145,7 +145,7 @@ class DoubleUnet(BaseModel):
             if isinstance(m, (nn.Conv2d, nn.Linear)):
                 nn.init.kaiming_normal_(m.weight)
                 if m.bias is not None:
-                    nn.init.constant_(m.bias, 0)
+                    m.bias.data.zero_()
 
             if isinstance(m, nn.BatchNorm2d):
                 m.weight.data.fill_(1)

@@ -286,7 +286,7 @@ class DoubleASPP(BaseModel):
             in_features=in_features,
             out_features=out_features,
             kernel_size=1,
-            padding=rate[0],
+            padding=0,
             dilation=rate[0],
             norm_type=norm_type,
             use_bias=False)
@@ -313,7 +313,7 @@ class DoubleASPP(BaseModel):
             use_bias=False)
 
         self.out = conv_block(
-            in_features=int(len(rate) * out_features),
+            in_features=int((len(rate) + 1) * out_features),
             out_features=out_features,
             kernel_size=1,
             padding=0,

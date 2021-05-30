@@ -53,18 +53,19 @@ class CNN(BaseModel):
 class VGG16(BaseModel):
     def __init__(self, pre_trained, req_grad, bn, out_channels=1, input_dim=(3, 512, 512)):
         nn.Module.__init__(self)
+        self.adaptavgpool = nn.AdaptiveAvgPool2d(2)
         if bn:
-            self.features = models.vgg16_bn(pretrained=pre_trained).features
+            self.features = models.vgg16_bn(pretrained=pre_trained).features[:-1]
 
         else:
-            self.features = models.vgg16(pretrained=pre_trained).features
+            self.features = models.vgg16(pretrained=pre_trained).features[:-1]
 
         for param in self.features.parameters():
             param.requires_grad = req_grad
 
         num_features_before_fcnn = functools.reduce(
             operator.mul,
-            list(self.features(torch.rand(1, *input_dim)).shape))
+            list(self.adaptavgpool(self.features(torch.rand(1, *input_dim))).shape))
 
         self.classifier = nn.Sequential(
             nn.Linear(in_features=num_features_before_fcnn, out_features=1024),
@@ -77,26 +78,28 @@ class VGG16(BaseModel):
     def forward(self, x):
         batch_size = x.size(0)
         out = self.features(x)
+        out = self.adaptavgpool(out)
         out = out.view(batch_size, -1)  # flatten the vector
         out = self.classifier(out)
         return out
 
 
 class VGG19(BaseModel):
-    def __init__(self, pre_trained, req_grad, bn, out_channels=1, input_dim=(3, 512, 512)):
+    def __init__(self, pre_trained, req_grad, bn, out_channels=2, input_dim=(3, 512, 512)):
         nn.Module.__init__(self)
+        self.adaptavgpool = nn.AdaptiveAvgPool2d(2)
         if bn:
-            self.features = models.vgg19_bn(pretrained=pre_trained).features
+            self.features = models.vgg19_bn(pretrained=pre_trained).features[:-1]
 
         else:
-            self.features = models.vgg19(pretrained=pre_trained).features
+            self.features = models.vgg19(pretrained=pre_trained).features[:-1]
 
         for param in self.features.parameters():
             param.requires_grad = req_grad
 
         num_features_before_fcnn = functools.reduce(
             operator.mul,
-            list(self.features(torch.rand(1, *input_dim)).shape))
+            list(self.adaptavgpool(self.features(torch.rand(1, *input_dim))).shape))
 
         self.classifier = nn.Sequential(
             nn.Linear(in_features=num_features_before_fcnn, out_features=1024),
@@ -109,6 +112,7 @@ class VGG19(BaseModel):
     def forward(self, x):
         batch_size = x.size(0)
         out = self.features(x)
+        out = self.adaptavgpool(out)
         out = out.view(batch_size, -1)  # flatten the vector
         out = self.classifier(out)
         return out

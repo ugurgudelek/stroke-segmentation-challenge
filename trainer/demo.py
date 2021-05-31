@@ -15,7 +15,8 @@ class DemoTrainer(BaseTrainer):
                  hyperparams,
                  params,
                  optimizer=None,
+                 scheduler=None,
                  criterion=None,
                  logger=None):
-        super().__init__(model, metrics, hyperparams, params, optimizer,
+        super().__init__(model, metrics, hyperparams, params, optimizer, scheduler,
                          criterion, logger)

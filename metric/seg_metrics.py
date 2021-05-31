@@ -111,6 +111,16 @@ class IoU_class2(nn.Module):
         return iou
 
 
+class MeanIoU(nn.Module):
+    def __init__(self):
+        super(MeanIoU, self).__init__()
+        self.iou1 = IoU_class1()
+        self.iou2 = IoU_class2()
+
+    def forward(self, yhat, y):
+        return (self.iou1(yhat, y) + self.iou2(yhat, y)) / 2
+
+
 class Specificity(nn.Module):
     def __init__(self, eps=1e-6):
         super().__init__()

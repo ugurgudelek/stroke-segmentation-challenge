@@ -15,6 +15,7 @@ from tqdm import tqdm
 import torch
 from sklearn.model_selection import train_test_split
 
+import torchvision.transforms.functional as TF
 import albumentations as A
 import albumentations.pytorch as Ap
 
@@ -185,7 +186,7 @@ class StrokeClassificationTorch(BaseTorchDataset):
 class StrokeSegmentationDataset:
     # KANAMA: channel Green - 1
     # ISKEMI: channel Blue  - 2
-    def __init__(self, root, transform=None, test_size=0.25):
+    def __init__(self, root, transform=None, val_transform=None, test_size=0.25):
         self.root = root  # Path('./input/stroke')
 
         dataset = xr.open_dataset(self.root / 'nc/stroke-segmentation.nc')
@@ -205,7 +206,7 @@ class StrokeSegmentationDataset:
         self.testset = StrokeSegmentationTorch(
             images=self.test_dataset.image.values,
             masks=self.test_dataset.mask.values,
-            transform=None)
+            transform=val_transform)
 
 
 class StrokeSegmentationTorch(BaseTorchDataset):
@@ -222,9 +223,17 @@ class StrokeSegmentationTorch(BaseTorchDataset):
             sample = self.transform(image=image, mask=mask)
             image = sample['image']
             mask = sample['mask']
+            image = image.permute(1, 0, 2)
+            image = image / 255.
+            image = TF.resize(image, (256, 256))
+            mask = mask/255
+            mask[2, :, :] *= 2
+            mask = mask.type(torch.LongTensor)
+            mask = mask[torch.max(mask), :, :]
 
-            image = self.transform(image)
-            mask = self.transform(mask)
+            # mask = mask.permute(1, 0, 2)
+            # image = self.transform(image)
+            # mask = self.transform(mask)
 
         return {'data': image, 'target': mask}
 
@@ -244,7 +253,7 @@ if __name__ == '__main__':
                            p=0.5),
         A.HorizontalFlip(p=0.5),
         A.RandomBrightnessContrast(p=0.2),
-        Ap.ToTensor()
+        Ap.ToTensorV2()
     ])
 
     d = StrokeSegmentationDataset(root=Path('./input/stroke'),

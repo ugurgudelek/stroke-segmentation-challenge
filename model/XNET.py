@@ -12,9 +12,10 @@ from model.MainBlocks import conv_block, DepthWiseConv2D, DSconv_block, x_block,
 
 
 class XNET(BaseModel):
-    def __init__(self, in_channels, out_channels, device, k=1, norm_type='bn', upsample_mode='nearest'):
+    def __init__(self, in_channels, out_channels, device, k=1, norm_type='bn', upsample_type='nearest'):
         nn.Module.__init__(self)
-        self.upsample = nn.Upsample(scale_factor=2, mode=upsample_mode)
+        self.upsample = nn.Upsample(scale_factor=2, mode=upsample_type)
+        self.upsample_last = nn.Upsample(scale_factor=4, mode=upsample_type)
         self.maxpool = nn.MaxPool2d(kernel_size=2)
         self.encode1 = x_block(in_features=in_channels, out_features=int(64 * k), norm_type=norm_type)
         self.encode2 = nn.Sequential(
@@ -48,6 +49,10 @@ class XNET(BaseModel):
             conv_block(in_features=int(128 * k), out_features=int(64 * k), norm_type=norm_type))
         self.decode5 = nn.Sequential(
             x_block(in_features=int(128 * k), out_features=int(64 * k), norm_type=norm_type),
+            self.upsample,
+            conv_block(in_features=int(64 * k), out_features=int(64 * k), norm_type=norm_type))
+        self.decode6 = nn.Sequential(
+            # x_block(in_features=int(64 * k), out_features=int(64 * k), norm_type=norm_type),
             nn.Conv2d(in_channels=int(64 * k), out_channels=out_channels, kernel_size=1, padding=0, stride=1))
         self.initialize_weights()
 
@@ -63,6 +68,7 @@ class XNET(BaseModel):
         x = self.decode3(torch.cat((x, x3), dim=1))
         x = self.decode4(torch.cat((x, x2), dim=1))
         x = self.decode5(torch.cat((x, x1), dim=1))
+        x = self.decode6(x)
 
         return x
 
@@ -74,14 +80,17 @@ class XNET(BaseModel):
                     nn.init.constant_(m.bias, 0)
 
 
-def test(batchsize):
-    in_channels = 3
-    in1 = torch.rand(batchsize, in_channels, 512, 512).to('cuda')
-    model = XNET(in_channels=in_channels, device='cuda', out_channels=3, k=0.25, norm_type='gn').to('cuda')
+if __name__ == '__main__':
+    def test(batchsize):
+        in_channels = 3
+        in1 = torch.rand(batchsize, in_channels, 512, 512).to('cuda')
+        model = XNET(in_channels=in_channels, device='cuda', out_channels=3, k=0.25, norm_type='gn').to('cuda')
 
-    out1 = model(in1)
-    return out1.shape
+        out1 = model(in1)
+        total_params = sum(p.numel() for p in model.parameters())
+
+        return out1.shape, total_params
 
 
-test(batchsize=4)
-# pytorch_total_params = sum(p.numel() for p in model.parameters())
+    shape, total_params = test(batchsize=6)
+    print('Shape : ', shape, '\nTotal params : ', total_params)

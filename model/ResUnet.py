@@ -57,14 +57,17 @@ class ResUnet(BaseModel):
                     nn.init.constant_(m.bias, 0)
 
 
-def test(batchsize):
-    in_channels = 3
-    in1 = torch.rand(batchsize, in_channels, 512, 512).to('cuda')
-    model = ResUnet(in_features=in_channels, out_features=3, k=0.25, norm_type='gn').to('cuda')
+if __name__ == '__main__':
+    def test(batchsize):
+        in_channels = 3
+        in1 = torch.rand(batchsize, in_channels, 512, 512).to('cuda')
+        model = ResUnet(in_features=in_channels, out_features=3, k=0.25, norm_type='gn').to('cuda')
 
-    out1 = model(in1)
-    return out1.shape
+        out1 = model(in1)
+        total_params = sum(p.numel() for p in model.parameters())
+
+        return out1.shape, total_params
 
 
-test(batchsize=8)
-pytorch_total_params = sum(p.numel() for p in model.parameters())
+    shape, total_params = test(batchsize=6)
+    print('Shape : ', shape, '\nTotal params : ', total_params)

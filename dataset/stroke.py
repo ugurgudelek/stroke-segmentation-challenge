@@ -173,7 +173,7 @@ class StrokeClassificationTorch(BaseTorchDataset):
         # image = torch.as_tensor(image, dtype=torch.float32) / 255.  # delete
         # Transform images
         if self.transform is not None:
-            image = self.transform(image=image)['image'] # true
+            image = self.transform(image=image)['image']  # true
             # image = self.transform(image)  # delete
         label = torch.as_tensor(label, dtype=torch.long)
 
@@ -218,18 +218,31 @@ class StrokeSegmentationTorch(BaseTorchDataset):
     def __getitem__(self, ix):
         image = self.images[ix]
         mask = self.masks[ix]
+        mask = mask / 255
+        # mask = mask.permute(2, 0, 1)
+        mask[2, :, :] *= 2
+        mask = mask[int(np.max(mask)), :, :]
+
+        image = np.transpose(image, axes=(1, 2, 0))
+        # mask = np.transpose(mask, axes=(1, 2, 0))
 
         if self.transform is not None:
             sample = self.transform(image=image, mask=mask)
             image = sample['image']
             mask = sample['mask']
-            image = image.permute(1, 0, 2)
+            # image = image.permute(2, 0, 1)
             image = image / 255.
-            image = TF.resize(image, (256, 256))
-            mask = mask/255
-            mask[2, :, :] *= 2
+
+
             mask = mask.type(torch.LongTensor)
-            mask = mask[torch.max(mask), :, :]
+            # image = TF.resize(image, (256, 256))
+
+            # mask = mask / 255
+            # # mask = mask.permute(2, 0, 1)
+            # mask[2, :, :] *= 2
+            # mask = mask.type(torch.LongTensor)
+            #
+            # mask = mask[torch.max(mask), :, :]
 
             # mask = mask.permute(1, 0, 2)
             # image = self.transform(image)

@@ -12,7 +12,7 @@ from model.MainBlocks import conv_block, ResConv
 
 
 class ResUnet(BaseModel):
-    def __init__(self, in_features, out_features, k=1, norm_type='bn'):
+    def __init__(self, in_features=3, out_features=3, k=1, norm_type='bn'):
         nn.Module.__init__(self)
         self.encode1 = nn.Sequential(
             conv_block(in_features=in_features, out_features=int(64 * k), norm_type=norm_type),
@@ -33,6 +33,10 @@ class ResUnet(BaseModel):
                                             kernel_size=2, stride=2)
         self.decode3 = ResConv(in_features=(int(128 * k) + int(64 * k)), out_features=int(64 * k),
                                norm_type=norm_type)
+        # self.upsample4 = nn.ConvTranspose2d(in_channels=int(64 * k), out_channels=int(64 * k),
+        #                                     kernel_size=2, stride=2)
+        # self.decode4 = ResConv(in_features=(int(64 * k)), out_features=int(64 * k),
+        #                        norm_type=norm_type)
         self.output = nn.Conv2d(in_channels=int(64 * k), out_channels=out_features, kernel_size=1, padding=0)
 
     def forward(self, x):
@@ -46,6 +50,8 @@ class ResUnet(BaseModel):
         x = self.decode2(torch.cat((x, x2), dim=1))
         x = self.upsample3(x)
         x = self.decode3(torch.cat((x, x1), dim=1))
+        # x = self.upsample4(x)
+        # x = self.decode4(x)
         x = self.output(x)
         return x
 
@@ -57,14 +63,17 @@ class ResUnet(BaseModel):
                     nn.init.constant_(m.bias, 0)
 
 
-def test(batchsize):
-    in_channels = 3
-    in1 = torch.rand(batchsize, in_channels, 512, 512).to('cuda')
-    model = ResUnet(in_features=in_channels, out_features=3, k=0.25, norm_type='gn').to('cuda')
+if __name__ == '__main__':
+    def test(batchsize):
+        in_channels = 3
+        in1 = torch.rand(batchsize, in_channels, 512, 512).to('cuda')
+        model = ResUnet(in_features=in_channels, out_features=3, k=0.25, norm_type='gn').to('cuda')
 
-    out1 = model(in1)
-    return out1.shape
+        out1 = model(in1)
+        total_params = sum(p.numel() for p in model.parameters())
+
+        return out1.shape, total_params
 
 
-test(batchsize=8)
-pytorch_total_params = sum(p.numel() for p in model.parameters())
+    shape, total_params = test(batchsize=6)
+    print('Shape : ', shape, '\nTotal params : ', total_params)

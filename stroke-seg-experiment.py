@@ -8,51 +8,56 @@
 from pathlib import Path
 import torch
 from torchvision import transforms
-import torchvision.transforms.functional as TF
+from torch.optim import lr_scheduler, Adam
+import albumentations as A
+import albumentations.pytorch as Ap
 
 from berries.experiments.experiment import Experiment
 from berries.metric import metrics
 from berries.logger import MultiLogger
 
-from dataset.stroke import StrokeClassificationDataset
-from model.cnn import VGG16, VGG19, CNN, DenseNet, ResNet, CustomCNN
+from dataset.stroke import StrokeSegmentationDataset
+from model.ResUnetPlus import ResUnetPlus
+from model.ResUnet import ResUnet
+from model.XNET import XNET
 from trainer.demo import DemoTrainer
-from metric import metrics as local_metrics
+from metric import seg_metrics as local_metrics
 from dataset.stroke import Stroke
-from loss.losses import WeightedBCELoss
+from loss.losses import DiceLoss, IoULoss, TrevskyLoss, FocalLoss, EnhancedMixingLoss
 
 
 class StrokeExperiment(Experiment):
     def __init__(self):
         self.params = {
             'project_name': 'stroke',
-            # 'experiment_name': 'ResNet-152-WBCE-lr1e-4-bsize-8-pretrained-0-dataaug-2-TL-0',
-            'experiment_name': 'VGG19_bn-WBCE-lr1e-4-bsize-8-pretrained-0-dataaug-2-TL-0',
+            'experiment_name': 'ResUnetPlus-gn-k05-IoU-lr1e-4-bsize-5-pretrained-0-dataaug-2-TL-0',
 
             # 'project_name': 'debug',
             # 'experiment_name': 'process',
             'seed': 42,
             'device': 'cuda' if torch.cuda.is_available() else 'cpu',
 
-            'resume': True,
+            'resume': False,
             'pretrained': False,
             'checkpoint': {
-                'on_epoch': 2,
+                'on_epoch': 1000,
+                'metric': local_metrics.IoU.__name__.lower(),
+                'trigger': lambda new, old: new > old
             },
             'log': {
                 'on_epoch': 1,
             },
             'stdout': {
                 'verbose': True,
-                'on_batch': 0,
+                'on_batch': 20,
                 'on_epoch': 1
             },
             'root': Path('./'),
             'neptune': {
-                'id': 'STROK-184',
+                # 'id': 'STROK-267',
                 'workspace': 'machining',
                 'project': 'stroke',
-                'tags': ['StrokeSeg', 'VGG19_bn-WBCE-lr1e-4-bsize-8-pretrained-0-dataaug-2-TL-0'],
+                'tags': ['StrokeSeg', 'ResUnetPlus-gn-k05-IoU-lr1e-4-bsize-5-pretrained-0-dataaug-2-TL-0'],
                 'source_files': ['./stroke-experiment.py']
             }
         }
@@ -60,9 +65,9 @@ class StrokeExperiment(Experiment):
         self.hyperparams = {
             'lr': 0.0001,
             'weight_decay': 0.,
-            'epoch': 100,
-            'batch_size': 8,
-            'validation_batch_size': 8,
+            'epoch': 500,
+            'batch_size': 5,
+            'validation_batch_size': 5,
         }  # yapf: disable
 
         self.alpha = 0.333
@@ -70,27 +75,54 @@ class StrokeExperiment(Experiment):
         # Stroke(root=Path('./input/stroke')).for_classification()
         # Stroke(root=Path('./input/stroke')).for_segmentation()
 
-        self.model = VGG19(pre_trained=False,
-                           req_grad=True,
-                           bn=True,
-                           out_channels=2,
-                           input_dim=(3, 512, 512))
+        # self.model = XNET(in_channels=3,
+        #                   out_channels=3,
+        #                   device=self.params['device'],
+        #                   k=0.25,
+        #                   norm_type='gn',
+        #                   upsample_type='bilinear')
 
-        # self.model = ResNet(net_type='ResNet-152',
-        #                     pre_trained=False,
-        #                     req_grad=True,
-        #                     out_channels=2,
-        #                     input_dim=(3, 512, 512))
+        self.model = ResUnetPlus(in_features=3,
+                                 out_features=3,
+                                 k=0.5,
+                                 norm_type='gn',
+                                 upsample_type='bilinear')
 
+        # self.model = ResUnet(in_features=3,
+        #                      out_features=3,
+        #                      k=0.5,
+        #                      norm_type='gn')
         print(self.model)
 
+        self.transform = A.Compose([
+            A.ShiftScaleRotate(shift_limit=0.01,
+                               scale_limit=0.01,
+                               rotate_limit=180,
+                               p=0.5),
+            A.HorizontalFlip(p=0.5),
+            A.VerticalFlip(p=0.5),
+            A.OneOf([A.GridDistortion(p=0.5),
+                     A.ElasticTransform(p=0.5),
+                     A.OpticalDistortion(p=0.5, distort_limit=2, shift_limit=0.5)],
+                    p=0.2),
+
+            A.GridDropout(p=0.2, random_offset=True, mask_fill_value=None),
+
+            A.OneOrOther(first=A.GaussianBlur(p=0.5),
+                         second=A.GlassBlur(p=0.5),
+                         p=0.2),
+
+            A.ColorJitter(p=0.2, brightness=0.4, contrast=0.4, saturation=0.4, hue=0.4),
+            A.GaussNoise(p=0.2),
+            # A.Sequential([A.CenterCrop(p=0.2, height=256, width=256),
+            #               A.Resize(p=0.2, height=512, width=512)]),
+            Ap.ToTensorV2()
+        ])
+
+        self.val_transform = A.Compose([Ap.ToTensorV2()])
         self.dataset = StrokeSegmentationDataset(Path('../stroke-segmentation-challenge/input/stroke'),
-                                                 transform=transforms.Compose([transforms.RandomApply(
-                                                     [transforms.RandomRotation((-180, 180)),
-                                                      transforms.ColorJitter(),
-                                                      transforms.RandomHorizontalFlip(p=0.5),
-                                                      transforms.RandomVerticalFlip(p=0.5),
-                                                      transforms.GaussianBlur(kernel_size=51)], p=0.5)]),
+                                                 transform=self.transform,
+                                                 val_transform=self.val_transform,
                                                  test_size=0.25)
 
         self.logger = MultiLogger(
@@ -100,17 +132,33 @@ class StrokeExperiment(Experiment):
             params=self.params,
             hyperparams=self.hyperparams)
 
+        self.optimizer = Adam(params=self.model.parameters(),
+                              lr=self.hyperparams.get('lr', 0.001),
+                              weight_decay=self.hyperparams.get(
+                                  'weight_decay', 0))
+
+        # Decay LR by a factor of 0.1 every 7 epochs
+        self.exp_lr_scheduler = lr_scheduler.StepLR(self.optimizer,
+                                                    step_size=7,
+                                                    gamma=0.1,
+                                                    verbose=False)
+
         self.trainer = DemoTrainer(
             model=self.model,
-            criterion=torch.nn.CrossEntropyLoss(
-                weight=torch.tensor([self.alpha, 1 - self.alpha]).to(self.params['device'])),
-            # criterion=WeightedBCELoss([self.alpha, 1-self.alpha]),
-            metrics=[local_metrics.Accuracy,
-                     local_metrics.MeanMetric,
-                     local_metrics.Recall,
-                     local_metrics.Specificity],
-            # metrics=[metrics.Accuracy],
-
+            criterion=IoULoss(),
+            # criterion=torch.nn.CrossEntropyLoss(),
+            #
+            # metrics=[local_metrics.Accuracy,
+            #          local_metrics.MeanIoU,
+            #          local_metrics.IoU_class1,
+            #          local_metrics.IoU_class2,
+            #          local_metrics.Recall_class1,
+            #          local_metrics.Recall_class2,
+            #          local_metrics.Precision_class1,
+            #          local_metrics.Precision_class2],
+            metrics=[local_metrics.IoU,
+                     local_metrics.F1_Class1,
+                     local_metrics.F1_Class2],
             hyperparams=self.hyperparams,
             params=self.params,
             logger=self.logger

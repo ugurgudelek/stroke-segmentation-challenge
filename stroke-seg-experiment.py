@@ -29,11 +29,11 @@ from loss.losses import DiceLoss, IoULoss, TrevskyLoss, FocalLoss, EnhancedMixin
 class StrokeExperiment(Experiment):
     def __init__(self):
         self.params = {
-            'project_name': 'stroke',
-            'experiment_name': 'ResUnet-gn-IoU-lr1e-4-bsize-4-pretrained-0-dataaug-1-TL-0',
+            # 'project_name': 'stroke',
+            # 'experiment_name': 'ResUnet-gn-IoU-lr1e-4-bsize-4-pretrained-0-dataaug-1-TL-0',
 
-            # 'project_name': 'debug',
-            # 'experiment_name': 'process',
+            'project_name': 'debug',
+            'experiment_name': 'process',
             'seed': 42,
             'device': 'cuda' if torch.cuda.is_available() else 'cpu',
 

@@ -90,7 +90,7 @@ class StrokeExperiment(Experiment):
 
         self.model = ResUnet(in_features=3,
                              out_features=3,
-                             k=0.25,
+                             k=0.5,
                              norm_type='gn')
         print(self.model)
 

@@ -15,23 +15,27 @@ class Accuracy(nn.Module):
 
 class IoU(torch.nn.Module):
     def __init__(self, num_classes=3, reduction='mean'):
-        super(IoU, self).__init__()
+        super().__init__()
         self.num_classes = num_classes
         self.reduction = reduction
 
-    def forward(self, logits, true, eps=1e-7):
-        true_1_hot = torch.eye(self.num_classes)[true.squeeze(1)]
+    def forward(self, yhat, y, eps=1e-7):
+        true_1_hot = torch.eye(self.num_classes)[y.type(torch.LongTensor).squeeze(1)]
         true_1_hot = true_1_hot.permute(0, 3, 1, 2).float()
-        probas = F.softmax(logits, dim=1)
-        probas = torch.argmax(probas, dim=1)
+        probas1 = F.softmax(yhat, dim=1)
+        probas1 = torch.argmax(probas1, dim=1)
 
-        true_1_hot = true_1_hot.type(logits.type())
-        dims = (0,) + tuple(range(2, true.ndimension()))
+        probas = torch.zeros((len(yhat), 3, 512, 512))
+        probas[probas1 == 1, 1] = 1
+        probas[probas1 == 2, 2] = 1
+
+        true_1_hot = true_1_hot.type(yhat.type())
+        dims = (0,) + tuple(range(2, y.ndimension()))
         intersection = torch.sum(probas * true_1_hot, dims)
         cardinality = torch.sum(probas + true_1_hot, dims)
         union = cardinality - intersection
         jacc_loss = (intersection / (union + eps)).mean()
-        return jacc_loss
+        return jacc_loss.numpy().item()
 
 
 class F1_Class1(nn.Module):

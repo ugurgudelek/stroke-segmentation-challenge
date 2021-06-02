@@ -12,7 +12,7 @@ from model.MainBlocks import conv_block, ResConv
 
 
 class ResUnet(BaseModel):
-    def __init__(self, in_features, out_features, k=1, norm_type='bn'):
+    def __init__(self, in_features=3, out_features=3, k=1, norm_type='bn'):
         nn.Module.__init__(self)
         self.encode1 = nn.Sequential(
             conv_block(in_features=in_features, out_features=int(64 * k), norm_type=norm_type),
@@ -33,6 +33,10 @@ class ResUnet(BaseModel):
                                             kernel_size=2, stride=2)
         self.decode3 = ResConv(in_features=(int(128 * k) + int(64 * k)), out_features=int(64 * k),
                                norm_type=norm_type)
+        # self.upsample4 = nn.ConvTranspose2d(in_channels=int(64 * k), out_channels=int(64 * k),
+        #                                     kernel_size=2, stride=2)
+        # self.decode4 = ResConv(in_features=(int(64 * k)), out_features=int(64 * k),
+        #                        norm_type=norm_type)
         self.output = nn.Conv2d(in_channels=int(64 * k), out_channels=out_features, kernel_size=1, padding=0)
 
     def forward(self, x):
@@ -46,6 +50,8 @@ class ResUnet(BaseModel):
         x = self.decode2(torch.cat((x, x2), dim=1))
         x = self.upsample3(x)
         x = self.decode3(torch.cat((x, x1), dim=1))
+        # x = self.upsample4(x)
+        # x = self.decode4(x)
         x = self.output(x)
         return x
 

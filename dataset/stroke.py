@@ -233,9 +233,9 @@ class StrokeSegmentationTorch(BaseTorchDataset):
             # image = image.permute(2, 0, 1)
             image = image / 255.
 
+            # image = TF.resize(image, (256, 256))
 
             mask = mask.type(torch.LongTensor)
-            # image = TF.resize(image, (256, 256))
 
             # mask = mask / 255
             # # mask = mask.permute(2, 0, 1)

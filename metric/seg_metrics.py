@@ -8,9 +8,9 @@ class Accuracy(nn.Module):
         super().__init__()
 
     def forward(self, yhat, y):
-        preds = (torch.argmax(yhat, dim=1)).detach()
+        preds = (torch.argmax(yhat, dim=1))
         acc = (torch.sum(preds == y)) / (preds.size(0) * preds.size(1) * preds.size(2))
-        return acc.cpu().numpy().item()
+        return acc.numpy().item()
 
 
 class Precision_class1(nn.Module):

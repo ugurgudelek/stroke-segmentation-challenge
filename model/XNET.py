@@ -47,12 +47,12 @@ class XNET(BaseModel):
             x_block(in_features=int(256 * k), out_features=int(128 * k), norm_type=norm_type),
             self.upsample,
             conv_block(in_features=int(128 * k), out_features=int(64 * k), norm_type=norm_type))
-        self.decode5 = nn.Sequential(
-            x_block(in_features=int(128 * k), out_features=int(64 * k), norm_type=norm_type),
-            self.upsample,
-            conv_block(in_features=int(64 * k), out_features=int(64 * k), norm_type=norm_type))
+        # self.decode5 = nn.Sequential(
+        #     x_block(in_features=int(128 * k), out_features=int(64 * k), norm_type=norm_type),
+        #     self.upsample,
+        #     conv_block(in_features=int(64 * k), out_features=int(64 * k), norm_type=norm_type))
         self.decode6 = nn.Sequential(
-            # x_block(in_features=int(64 * k), out_features=int(64 * k), norm_type=norm_type),
+            x_block(in_features=int(128 * k), out_features=int(64 * k), norm_type=norm_type),
             nn.Conv2d(in_channels=int(64 * k), out_channels=out_channels, kernel_size=1, padding=0, stride=1))
         self.initialize_weights()
 
@@ -67,8 +67,8 @@ class XNET(BaseModel):
         x = self.decode2(torch.cat((x, x4), dim=1))
         x = self.decode3(torch.cat((x, x3), dim=1))
         x = self.decode4(torch.cat((x, x2), dim=1))
-        x = self.decode5(torch.cat((x, x1), dim=1))
-        x = self.decode6(x)
+        x = self.decode6(torch.cat((x, x1), dim=1))
+        # x = self.decode6(x)
 
         return x
 

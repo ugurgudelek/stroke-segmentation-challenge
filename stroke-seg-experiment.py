@@ -18,6 +18,7 @@ from berries.logger import MultiLogger
 
 from dataset.stroke import StrokeSegmentationDataset
 from model.ResUnetPlus import ResUnetPlus
+from model.ResUnet import ResUnet
 from model.XNET import XNET
 from trainer.demo import DemoTrainer
 from metric import seg_metrics as local_metrics
@@ -28,11 +29,11 @@ from loss.losses import DiceLoss, IoULoss, TrevskyLoss, FocalLoss, EnhancedMixin
 class StrokeExperiment(Experiment):
     def __init__(self):
         self.params = {
-            # 'project_name': 'stroke',
-            # 'experiment_name': 'XNet-bn-IoU-lr1e-4-bsize-8-pretrained-0-dataaug-2-TL-0',
+            'project_name': 'stroke',
+            'experiment_name': 'ResUnet-gn-IoU-lr1e-4-bsize-4-pretrained-0-dataaug-1-TL-0',
 
-            'project_name': 'debug',
-            'experiment_name': 'process',
+            # 'project_name': 'debug',
+            # 'experiment_name': 'process',
             'seed': 42,
             'device': 'cuda' if torch.cuda.is_available() else 'cpu',
 
@@ -40,7 +41,7 @@ class StrokeExperiment(Experiment):
             'pretrained': False,
             'checkpoint': {
                 'on_epoch': 1000,
-                'metric': local_metrics.MeanIoU.__name__.lower(),
+                'metric': local_metrics.Accuracy.__name__.lower(),
                 'trigger': lambda new, old: new > old
             },
             'log': {
@@ -48,21 +49,21 @@ class StrokeExperiment(Experiment):
             },
             'stdout': {
                 'verbose': True,
-                'on_batch': 1,
+                'on_batch': 20,
                 'on_epoch': 1
             },
             'root': Path('./'),
             'neptune': {
-                # 'id': 'STROK-184',
+                # 'id': 'STROK-267',
                 'workspace': 'machining',
                 'project': 'stroke',
-                'tags': ['StrokeSeg', 'XNet-bn-IoU-lr1e-4-bsize-8-pretrained-0-dataaug-2-TL-0'],
+                'tags': ['StrokeSeg', 'ResUnet-gn-IoU-lr1e-4-bsize-4-pretrained-0-dataaug-1-TL-0'],
                 'source_files': ['./stroke-experiment.py']
             }
         }
 
         self.hyperparams = {
-            'lr': 0.00001,
+            'lr': 0.0001,
             'weight_decay': 0.,
             'epoch': 500,
             'batch_size': 4,
@@ -74,28 +75,33 @@ class StrokeExperiment(Experiment):
         # Stroke(root=Path('./input/stroke')).for_classification()
         # Stroke(root=Path('./input/stroke')).for_segmentation()
 
-        self.model = XNET(in_channels=3,
-                          out_channels=3,
-                          device=self.params['device'],
-                          k=0.25,
-                          norm_type='gn',
-                          upsample_type='bilinear')
-
-        # self.model = ResUnetPlus(in_features=3,
-        #                   out_features=3,
+        # self.model = XNET(in_channels=3,
+        #                   out_channels=3,
+        #                   device=self.params['device'],
         #                   k=0.25,
         #                   norm_type='gn',
         #                   upsample_type='bilinear')
+
+        # self.model = ResUnetPlus(in_features=3,
+        #                          out_features=3,
+        #                          k=0.25,
+        #                          norm_type='gn',
+        #                          upsample_type='bilinear')
+
+        self.model = ResUnet(in_features=3,
+                             out_features=3,
+                             k=0.25,
+                             norm_type='gn')
         print(self.model)
 
         self.transform = A.Compose([
-            A.ShiftScaleRotate(shift_limit=0.05,
-                               scale_limit=0.05,
+            A.ShiftScaleRotate(shift_limit=0.01,
+                               scale_limit=0.01,
                                rotate_limit=180,
                                p=0.5),
             A.HorizontalFlip(p=0.5),
             A.VerticalFlip(p=0.5),
-            A.ColorJitter(p=0.2),
+            # A.ColorJitter(p=0.2),
             # A.GaussianBlur(p=0.2),
             # A.GaussNoise(p=0.2),
             # A.GlassBlur(p=0.2),
@@ -119,7 +125,6 @@ class StrokeExperiment(Experiment):
                               weight_decay=self.hyperparams.get(
                                   'weight_decay', 0))
 
-
         # Decay LR by a factor of 0.1 every 7 epochs
         self.exp_lr_scheduler = lr_scheduler.StepLR(self.optimizer,
                                                     step_size=7,
@@ -129,15 +134,17 @@ class StrokeExperiment(Experiment):
         self.trainer = DemoTrainer(
             model=self.model,
             criterion=IoULoss(),
-
-            metrics=[local_metrics.Accuracy,
-                     local_metrics.MeanIoU,
-                     local_metrics.IoU_class1,
-                     local_metrics.IoU_class2,
-                     local_metrics.Recall_class1,
-                     local_metrics.Recall_class2,
-                     local_metrics.Precision_class1,
-                     local_metrics.Precision_class2],
+            # criterion=torch.nn.CrossEntropyLoss(),
+            #
+            # metrics=[local_metrics.Accuracy,
+            #          local_metrics.MeanIoU,
+            #          local_metrics.IoU_class1,
+            #          local_metrics.IoU_class2,
+            #          local_metrics.Recall_class1,
+            #          local_metrics.Recall_class2,
+            #          local_metrics.Precision_class1,
+            #          local_metrics.Precision_class2],
+            metrics=[local_metrics.Accuracy],
             hyperparams=self.hyperparams,
             params=self.params,
             logger=self.logger

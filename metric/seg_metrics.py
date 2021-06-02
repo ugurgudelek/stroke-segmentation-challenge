@@ -13,6 +13,59 @@ class Accuracy(nn.Module):
         return acc.numpy().item()
 
 
+class IoU(torch.nn.Module):
+    def __init__(self, num_classes=3, reduction='mean'):
+        super(IoU, self).__init__()
+        self.num_classes = num_classes
+        self.reduction = reduction
+
+    def forward(self, logits, true, eps=1e-7):
+        true_1_hot = torch.eye(self.num_classes)[true.squeeze(1)]
+        true_1_hot = true_1_hot.permute(0, 3, 1, 2).float()
+        probas = F.softmax(logits, dim=1)
+        probas = torch.argmax(probas, dim=1)
+
+        true_1_hot = true_1_hot.type(logits.type())
+        dims = (0,) + tuple(range(2, true.ndimension()))
+        intersection = torch.sum(probas * true_1_hot, dims)
+        cardinality = torch.sum(probas + true_1_hot, dims)
+        union = cardinality - intersection
+        jacc_loss = (intersection / (union + eps)).mean()
+        return jacc_loss
+
+
+class F1_Class1(nn.Module):
+    def __init__(self, in_class=1, eps=1e-6):
+        super().__init__()
+        self.eps = eps
+        self.in_class = in_class
+
+    def forward(self, yhat, y):
+        yhat = F.softmax(yhat, dim=1)
+        preds = torch.argmax(yhat, dim=1)
+        preds[preds != self.in_class] = 0
+        TP = torch.sum((preds == self.in_class) * (y == self.in_class))
+        FN = torch.sum((preds == 0) * (y == self.in_class))
+        FP = torch.sum((preds == self.in_class) * (y == 0))
+        return (TP / (TP + 0.5 * (FP + FN) + self.eps)).numpy().item()
+
+
+class F1_Class2(nn.Module):
+    def __init__(self, in_class=2, eps=1e-6):
+        super().__init__()
+        self.eps = eps
+        self.in_class = in_class
+
+    def forward(self, yhat, y):
+        yhat = F.softmax(yhat, dim=1)
+        preds = torch.argmax(yhat, dim=1)
+        preds[preds != self.in_class] = 0
+        TP = torch.sum((preds == self.in_class) * (y == self.in_class))
+        FN = torch.sum((preds == 0) * (y == self.in_class))
+        FP = torch.sum((preds == self.in_class) * (y == 0))
+        return (TP / (TP + 0.5 * (FP + FN) + self.eps)).numpy().item()
+
+
 class Precision_class1(nn.Module):
     def __init__(self, in_class=1, eps=1e-6):
         super().__init__()
@@ -20,12 +73,13 @@ class Precision_class1(nn.Module):
         self.in_class = in_class
 
     def forward(self, yhat, y):
-        preds = (torch.argmax(yhat, dim=1)).detach()
+        yhat = F.softmax(yhat, dim=1)
+        preds = (torch.argmax(yhat, dim=1))
 
         preds[preds != self.in_class] = 0
         TP = torch.sum((preds == self.in_class) * (y == self.in_class))
         FP = torch.sum((preds == self.in_class) * (y == 0))
-        return (TP / (TP + FP + self.eps)).cpu().numpy().item()
+        return (TP / (TP + FP + self.eps)).numpy().item()
 
 
 class Precision_class2(nn.Module):
@@ -35,12 +89,13 @@ class Precision_class2(nn.Module):
         self.in_class = in_class
 
     def forward(self, yhat, y):
-        preds = (torch.argmax(yhat, dim=1)).detach()
+        yhat = F.softmax(yhat, dim=1)
+        preds = (torch.argmax(yhat, dim=1))
 
         preds[preds != self.in_class] = 0
         TP = torch.sum((preds == self.in_class) * (y == self.in_class))
         FP = torch.sum((preds == self.in_class) * (y == 0))
-        return (TP / (TP + FP + self.eps)).cpu().numpy().item()
+        return (TP / (TP + FP + self.eps)).numpy().item()
 
 
 class Recall_class1(nn.Module):
@@ -50,7 +105,8 @@ class Recall_class1(nn.Module):
         self.in_class = in_class
 
     def forward(self, yhat, y):
-        preds = (torch.argmax(yhat, dim=1)).detach()
+        yhat = F.softmax(yhat, dim=1)
+        preds = (torch.argmax(yhat, dim=1))
 
         preds[preds != self.in_class] = 0
         TP = torch.sum((preds == self.in_class) * (y == self.in_class))
@@ -65,7 +121,8 @@ class Recall_class2(nn.Module):
         self.in_class = in_class
 
     def forward(self, yhat, y):
-        preds = (torch.argmax(yhat, dim=1)).detach()
+        yhat = F.softmax(yhat, dim=1)
+        preds = (torch.argmax(yhat, dim=1))
 
         preds[preds != self.in_class] = 0
         TP = torch.sum((preds == self.in_class) * (y == self.in_class))
@@ -111,16 +168,6 @@ class IoU_class2(nn.Module):
         return iou
 
 
-class MeanIoU(nn.Module):
-    def __init__(self):
-        super(MeanIoU, self).__init__()
-        self.iou1 = IoU_class1()
-        self.iou2 = IoU_class2()
-
-    def forward(self, yhat, y):
-        return (self.iou1(yhat, y) + self.iou2(yhat, y)) / 2
-
-
 class Specificity(nn.Module):
     def __init__(self, eps=1e-6):
         super().__init__()
@@ -144,16 +191,3 @@ class MeanMetric(nn.Module):
         recall = self.recall(yhat, y)
         specificity = self.specificity(yhat, y)
         return (recall + specificity) / 2
-
-
-class F1(nn.Module):
-    def __init__(self, eps=1e-6):
-        super().__init__()
-        self.eps = eps
-
-    def forward(self, yhat, y):
-        preds = (torch.argmax(yhat, dim=1)).detach()
-        TP = torch.sum((preds == 1) * (y == 1))
-        FN = torch.sum((preds == 0) * (y == 1))
-        FP = torch.sum((preds == 1) * (y == 0))
-        return (TP / (TP + 0.5 * (FP + FN) + self.eps)).cpu().numpy().item()

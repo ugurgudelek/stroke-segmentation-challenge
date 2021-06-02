@@ -41,7 +41,7 @@ class StrokeExperiment(Experiment):
             'pretrained': False,
             'checkpoint': {
                 'on_epoch': 1000,
-                'metric': local_metrics.Accuracy.__name__.lower(),
+                'metric': local_metrics.IoU.__name__.lower(),
                 'trigger': lambda new, old: new > old
             },
             'log': {
@@ -144,7 +144,9 @@ class StrokeExperiment(Experiment):
             #          local_metrics.Recall_class2,
             #          local_metrics.Precision_class1,
             #          local_metrics.Precision_class2],
-            metrics=[local_metrics.Accuracy],
+            metrics=[local_metrics.IoU,
+                     local_metrics.F1_Class1,
+                     local_metrics.F1_Class2],
             hyperparams=self.hyperparams,
             params=self.params,
             logger=self.logger

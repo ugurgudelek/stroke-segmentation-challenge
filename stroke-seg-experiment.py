@@ -29,11 +29,11 @@ from loss.losses import DiceLoss, IoULoss, TrevskyLoss, FocalLoss, EnhancedMixin
 class StrokeExperiment(Experiment):
     def __init__(self):
         self.params = {
-            # 'project_name': 'stroke',
-            # 'experiment_name': 'ResUnet-gn-IoU-lr1e-4-bsize-4-pretrained-0-dataaug-1-TL-0',
+            'project_name': 'stroke',
+            'experiment_name': 'ResUnetPlus-gn-k05-IoU-lr1e-4-bsize-5-pretrained-0-dataaug-2-TL-0',
 
-            'project_name': 'debug',
-            'experiment_name': 'process',
+            # 'project_name': 'debug',
+            # 'experiment_name': 'process',
             'seed': 42,
             'device': 'cuda' if torch.cuda.is_available() else 'cpu',
 
@@ -57,7 +57,7 @@ class StrokeExperiment(Experiment):
                 # 'id': 'STROK-267',
                 'workspace': 'machining',
                 'project': 'stroke',
-                'tags': ['StrokeSeg', 'ResUnet-gn-IoU-lr1e-4-bsize-4-pretrained-0-dataaug-1-TL-0'],
+                'tags': ['StrokeSeg', 'ResUnetPlus-gn-k05-IoU-lr1e-4-bsize-5-pretrained-0-dataaug-2-TL-0'],
                 'source_files': ['./stroke-experiment.py']
             }
         }
@@ -66,8 +66,8 @@ class StrokeExperiment(Experiment):
             'lr': 0.0001,
             'weight_decay': 0.,
             'epoch': 500,
-            'batch_size': 4,
-            'validation_batch_size': 4,
+            'batch_size': 5,
+            'validation_batch_size': 5,
         }  # yapf: disable
 
         self.alpha = 0.333
@@ -82,16 +82,16 @@ class StrokeExperiment(Experiment):
         #                   norm_type='gn',
         #                   upsample_type='bilinear')
 
-        # self.model = ResUnetPlus(in_features=3,
-        #                          out_features=3,
-        #                          k=0.25,
-        #                          norm_type='gn',
-        #                          upsample_type='bilinear')
+        self.model = ResUnetPlus(in_features=3,
+                                 out_features=3,
+                                 k=0.5,
+                                 norm_type='gn',
+                                 upsample_type='bilinear')
 
-        self.model = ResUnet(in_features=3,
-                             out_features=3,
-                             k=0.5,
-                             norm_type='gn')
+        # self.model = ResUnet(in_features=3,
+        #                      out_features=3,
+        #                      k=0.5,
+        #                      norm_type='gn')
         print(self.model)
 
         self.transform = A.Compose([
@@ -101,12 +101,24 @@ class StrokeExperiment(Experiment):
                                p=0.5),
             A.HorizontalFlip(p=0.5),
             A.VerticalFlip(p=0.5),
-            # A.ColorJitter(p=0.2),
-            # A.GaussianBlur(p=0.2),
-            # A.GaussNoise(p=0.2),
-            # A.GlassBlur(p=0.2),
+            A.OneOf([A.GridDistortion(p=0.5),
+                     A.ElasticTransform(p=0.5),
+                     A.OpticalDistortion(p=0.5, distort_limit=2, shift_limit=0.5)],
+                    p=0.2),
+
+            A.GridDropout(p=0.2, random_offset=True, mask_fill_value=None),
+
+            A.OneOrOther(first=A.GaussianBlur(p=0.5),
+                         second=A.GlassBlur(p=0.5),
+                         p=0.2),
+
+            A.ColorJitter(p=0.2, brightness=0.4, contrast=0.4, saturation=0.4, hue=0.4),
+            A.GaussNoise(p=0.2),
+            # A.Sequential([A.CenterCrop(p=0.2, height=256, width=256),
+            #               A.Resize(p=0.2, height=512, width=512)]),
             Ap.ToTensorV2()
         ])
+
         self.val_transform = A.Compose([Ap.ToTensorV2()])
         self.dataset = StrokeSegmentationDataset(Path('../stroke-segmentation-challenge/input/stroke'),
                                                  transform=self.transform,

@@ -148,8 +148,8 @@ class StrokeExperiment(Experiment):
                                       vgg_criterion=nn.MSELoss(),
                                       device=self.params['device']),
             metrics=[local_metrics.IoU,
-                     local_metrics.Dice,
-                     local_metrics.F1],
+                     local_metrics.F1_Class1,
+                     local_metrics.F1_Class2],
             hyperparams=self.hyperparams,
             params=self.params,
             logger=self.logger

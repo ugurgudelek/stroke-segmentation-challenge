@@ -147,11 +147,12 @@ class VGGLoss(nn.Module):
 
 
 class CombinedVGGLoss(nn.Module):
-    def __init__(self, main_criterion, vgg_criterion, balancing_term=0.1, device='cuda'):
+    def __init__(self, main_criterion, vgg_criterion, balancing_term=0.1, reduction='mean', device='cuda'):
         super(CombinedVGGLoss, self).__init__()
         self.vgg_loss = VGGLoss(VGGExtractor(device=device), vgg_criterion)
         self.main_loss = main_criterion
         self.mu = balancing_term
+        self.reduction = reduction
 
     def forward(self, pred, target):
         loss = self.main_loss(pred, target) + self.mu * self.main_loss(pred, target)

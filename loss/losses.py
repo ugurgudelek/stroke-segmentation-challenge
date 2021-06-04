@@ -96,7 +96,7 @@ class EnhancedMixingLoss(torch.nn.Module):
 
 ########### VGGLOSS ###########
 class VGGExtractor(nn.Module):
-    def __init__(self, layers=[3, 8, 17, 26], device='cuda'):
+    def __init__(self, device, layers=[3, 8, 17, 26]):
         super(VGGExtractor, self).__init__()
         self.layers = layers
         self.mu = torch.tensor([0.485, 0.456, 0.406], requires_grad=False).view((1, 3, 1, 1)).to(device)
@@ -120,26 +120,27 @@ class VGGExtractor(nn.Module):
 
 
 class VGGLoss(nn.Module):
-    def __init__(self, extractor, criterion, K=1):
+    def __init__(self, extractor, criterion, num_classes=3, K=1, device='cuda'):
         super(VGGLoss, self).__init__()
-        self.criterion = criterion
-        self.K = K
         self.extractor = extractor
+        self.criterion = criterion
+        self.num_classes = num_classes
+        self.K = K
+        self.device = device
 
-    def forward(self, preds, target_in):
+    def forward(self, preds, target):
+        probs = F.softmax(preds, dim=1)
+        target_hot = torch.eye(self.num_classes).to(self.device)[target.squeeze(1)]
+        target_hot = target_hot.permute(0, 3, 1, 2).float()
 
-        preds = F.softmax(preds, dim=1)
-        target1 = target_in[:, 0, :, :]
-        target1[torch.logical_and(target_in[:, 1, :, :] == 0, target_in[:, 2, :, :] == 0)] = 255
-        target = torch.cat((target1.unsqueeze(1), target_in[:, 1:3, :, :]), dim=1) / 255
-        preds = self.extractor(preds)
-        target = self.extractor(target)
+        probs = self.extractor(probs)
+        target_hot = self.extractor(target_hot)
 
-        N = len(preds)
+        N = len(probs)
         losses = 0
         for i in range(self.K):
             for j in range(N):
-                losses += (i + 1) * self.criterion(preds[j], target[j])
+                losses += (i + 1) * self.criterion(probs[j], target_hot[j])
 
         coeff = 0.5 * self.K * (self.K + 1)
         loss = losses / (coeff * N)
@@ -147,13 +148,13 @@ class VGGLoss(nn.Module):
 
 
 class CombinedVGGLoss(nn.Module):
-    def __init__(self, main_criterion, vgg_criterion, balancing_term=0.1, reduction='mean', device='cuda'):
+    def __init__(self, main_criterion, vgg_criterion, balance=[1, 0.1], reduction='mean', device='cuda'):
         super(CombinedVGGLoss, self).__init__()
-        self.vgg_loss = VGGLoss(VGGExtractor(device=device), vgg_criterion)
+        self.vgg_loss = VGGLoss(VGGExtractor(device=device), vgg_criterion, device=device)
         self.main_loss = main_criterion
-        self.mu = balancing_term
+        self.balance = balance
         self.reduction = reduction
 
     def forward(self, pred, target):
-        loss = self.main_loss(pred, target) + self.mu * self.main_loss(pred, target)
+        loss = self.balance[0] * self.main_loss(pred, target) + self.balance[1] * self.vgg_loss(pred, target)
         return loss

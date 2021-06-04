@@ -54,6 +54,7 @@ class StrokeExperiment(Experiment):
                 'on_batch': 1,
                 'on_epoch': 1
             },
+
             'root': Path('./'),
             'neptune': {
                 # 'id': 'STROK-267',
@@ -146,6 +147,7 @@ class StrokeExperiment(Experiment):
             # criterion=IoULoss(),
             criterion=CombinedVGGLoss(main_criterion=IoULoss(),
                                       vgg_criterion=nn.MSELoss(),
+                                      balance=[1, 0.1],
                                       device=self.params['device']),
             metrics=[local_metrics.IoU,
                      local_metrics.F1_Class1,

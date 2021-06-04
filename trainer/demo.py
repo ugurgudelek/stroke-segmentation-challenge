@@ -25,7 +25,7 @@ class DemoTrainer(BaseTrainer):
         import matplotlib.pyplot as plt
         import numpy as np
 
-        samples = self.validation_dataset.get_random_sample(n=3)
+        samples = self.validation_dataset.get_random_sample(n=4)
         predictions, targets = self.transform(dataset=samples,
                                               classification=True)
         for i in range(len(samples)):

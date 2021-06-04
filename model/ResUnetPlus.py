@@ -38,15 +38,15 @@ class ResUnetPlus(BaseModel):
         self.aspp_bridge = ResUASPP(int(256 * k), int(512 * k), norm_type=norm_type)
 
         self.attn1 = AttentionBlock(int(128 * k), int(512 * k), int(512 * k), norm_type=norm_type)
-        self.upsample1 = nn.Upsample(scale_factor=2, mode=upsample_type)
+        self.upsample1 = nn.Upsample(scale_factor=2, mode=upsample_type, align_corners=False)
         self.up_residual_conv1 = ResConv(int(512 * k) + int(128 * k), int(256 * k), norm_type=norm_type)
 
         self.attn2 = AttentionBlock(int(64 * k), int(256 * k), int(256 * k), norm_type=norm_type)
-        self.upsample2 = nn.Upsample(scale_factor=2, mode=upsample_type)
+        self.upsample2 = nn.Upsample(scale_factor=2, mode=upsample_type, align_corners=False)
         self.up_residual_conv2 = ResConv(int(256 * k) + int(64 * k), int(128 * k), norm_type=norm_type)
 
         self.attn3 = AttentionBlock(int(32 * k), int(128 * k), int(128 * k), norm_type=norm_type)
-        self.upsample3 = nn.Upsample(scale_factor=2, mode=upsample_type)
+        self.upsample3 = nn.Upsample(scale_factor=2, mode=upsample_type, align_corners=False)
         self.up_residual_conv3 = ResConv(int(128 * k) + int(32 * k), int(64 * k), norm_type=norm_type)
 
         self.aspp_out = ResUASPP(int(64 * k), int(32 * k), norm_type=norm_type)

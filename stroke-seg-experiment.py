@@ -7,8 +7,10 @@
 
 from pathlib import Path
 import torch
+import torch.nn as nn
 from torchvision import transforms
 from torch.optim import lr_scheduler, Adam
+
 import albumentations as A
 import albumentations.pytorch as Ap
 
@@ -23,17 +25,17 @@ from model.XNET import XNET
 from trainer.demo import DemoTrainer
 from metric import seg_metrics as local_metrics
 from dataset.stroke import Stroke
-from loss.losses import DiceLoss, IoULoss, TrevskyLoss, FocalLoss, EnhancedMixingLoss
+from loss.losses import DiceLoss, IoULoss, TrevskyLoss, FocalLoss, EnhancedMixingLoss, CombinedVGGLoss
 
 
 class StrokeExperiment(Experiment):
     def __init__(self):
         self.params = {
-            'project_name': 'stroke',
-            'experiment_name': 'ResUnetPlus-gn-k05-IoU-lr1e-4-bsize-5-pretrained-0-dataaug-2-TL-0',
+            # 'project_name': 'stroke',
+            # 'experiment_name': 'ResUnetPlus-gn-k05-CombinedVgg-lr1e-4-bsize-2-pretrained-0-dataaug-2-TL-0',
 
-            # 'project_name': 'debug',
-            # 'experiment_name': 'process',
+            'project_name': 'debug',
+            'experiment_name': 'process',
             'seed': 42,
             'device': 'cuda' if torch.cuda.is_available() else 'cpu',
 
@@ -49,7 +51,7 @@ class StrokeExperiment(Experiment):
             },
             'stdout': {
                 'verbose': True,
-                'on_batch': 20,
+                'on_batch': 1,
                 'on_epoch': 1
             },
             'root': Path('./'),
@@ -57,7 +59,9 @@ class StrokeExperiment(Experiment):
                 # 'id': 'STROK-267',
                 'workspace': 'machining',
                 'project': 'stroke',
-                'tags': ['StrokeSeg', 'ResUnetPlus-gn-k05-IoU-lr1e-4-bsize-5-pretrained-0-dataaug-2-TL-0'],
+                'tags': ['StrokeSeg', 'ResUnetPlus-gn-k05-CombinedVgg-lr1e-4-bsize-2-pretrained-0-dataaug-2-TL-0'],
+                # 'tags': ['StrokeSeg', 'debug'],
+
                 'source_files': ['./stroke-experiment.py']
             }
         }
@@ -66,8 +70,8 @@ class StrokeExperiment(Experiment):
             'lr': 0.0001,
             'weight_decay': 0.,
             'epoch': 500,
-            'batch_size': 5,
-            'validation_batch_size': 5,
+            'batch_size': 4,
+            'validation_batch_size': 4,
         }  # yapf: disable
 
         self.alpha = 0.333
@@ -105,17 +109,11 @@ class StrokeExperiment(Experiment):
                      A.ElasticTransform(p=0.5),
                      A.OpticalDistortion(p=0.5, distort_limit=2, shift_limit=0.5)],
                     p=0.2),
-
             A.GridDropout(p=0.2, random_offset=True, mask_fill_value=None),
-
-            A.OneOrOther(first=A.GaussianBlur(p=0.5),
-                         second=A.GlassBlur(p=0.5),
-                         p=0.2),
-
+            A.OneOf([A.GaussianBlur(p=0.5),
+                     A.GlassBlur(p=0.5)], p=0.2),
             A.ColorJitter(p=0.2, brightness=0.4, contrast=0.4, saturation=0.4, hue=0.4),
             A.GaussNoise(p=0.2),
-            # A.Sequential([A.CenterCrop(p=0.2, height=256, width=256),
-            #               A.Resize(p=0.2, height=512, width=512)]),
             Ap.ToTensorV2()
         ])
 
@@ -145,20 +143,13 @@ class StrokeExperiment(Experiment):
 
         self.trainer = DemoTrainer(
             model=self.model,
-            criterion=IoULoss(),
-            # criterion=torch.nn.CrossEntropyLoss(),
-            #
-            # metrics=[local_metrics.Accuracy,
-            #          local_metrics.MeanIoU,
-            #          local_metrics.IoU_class1,
-            #          local_metrics.IoU_class2,
-            #          local_metrics.Recall_class1,
-            #          local_metrics.Recall_class2,
-            #          local_metrics.Precision_class1,
-            #          local_metrics.Precision_class2],
+            # criterion=IoULoss(),
+            criterion=CombinedVGGLoss(main_criterion=IoULoss(),
+                                      vgg_criterion=nn.MSELoss(),
+                                      device=self.params['device']),
             metrics=[local_metrics.IoU,
-                     local_metrics.F1_Class1,
-                     local_metrics.F1_Class2],
+                     local_metrics.Dice,
+                     local_metrics.F1],
             hyperparams=self.hyperparams,
             params=self.params,
             logger=self.logger

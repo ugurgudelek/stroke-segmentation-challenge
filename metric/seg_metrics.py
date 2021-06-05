@@ -72,6 +72,30 @@ class IoU(torch.nn.Module):
         return jacc_loss.numpy().item()
 
 
+class DiceScore(torch.nn.Module):
+    def __init__(self, num_classes=3, smooth=0, reduction='mean'):
+        super(DiceScore, self).__init__()
+        self.num_classes = num_classes
+        self.reduction = reduction
+        self.smooth = smooth
+
+    def forward(self, yhat, y, eps=1e-7):
+        true_1_hot = torch.eye(self.num_classes)[y.type(torch.LongTensor).squeeze(1)]
+        true_1_hot = true_1_hot.permute(0, 3, 1, 2).float()
+        probas1 = F.softmax(yhat, dim=1)
+        probas1 = torch.argmax(probas1, dim=1)
+
+        probas = torch.zeros((len(yhat), 3, 512, 512))
+        probas[probas1 == 1, 1] = 1
+        probas[probas1 == 2, 2] = 1
+        true_1_hot = true_1_hot.type(yhat.type())
+        dims = (0,) + tuple(range(2, y.ndimension()))
+        intersection = torch.sum(probas * true_1_hot, dims)
+        cardinality = torch.sum(probas + true_1_hot, dims)
+        dice_loss = ((2. * intersection + self.smooth) / (cardinality + eps + self.smooth)).mean()
+        return dice_loss.numpy().item()
+
+
 class F1_Class1(nn.Module):
     def __init__(self, in_class=1, eps=1e-6):
         super().__init__()

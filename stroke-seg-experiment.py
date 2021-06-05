@@ -22,24 +22,26 @@ from dataset.stroke import StrokeSegmentationDataset
 from model.ResUnetPlus import ResUnetPlus
 from model.ResUnet import ResUnet
 from model.XNET import XNET
+from model.RecrusiveFramework import RecursiveModel
 from trainer.demo import DemoTrainer
 from metric import seg_metrics as local_metrics
 from dataset.stroke import Stroke
-from loss.losses import DiceLoss, IoULoss, TrevskyLoss, FocalLoss, EnhancedMixingLoss, CombinedVGGLoss
+from loss.losses import DiceLoss, IoULoss, TrevskyLoss, FocalLoss, EnhancedMixingLoss, VGGLoss, VGGExtractor, \
+    CombinedVGGLoss, RecursiveCombinedVGGLoss
 
 
 class StrokeExperiment(Experiment):
     def __init__(self):
         self.params = {
-            # 'project_name': 'stroke',
-            # 'experiment_name': 'ResUnetPlus-gn-k05-CombinedVgg-lr1e-4-bsize-2-pretrained-0-dataaug-2-TL-0',
+            'project_name': 'stroke',
+            'experiment_name': 'ResUnetPlus-gn-k05-CombinedVgg-lr1e-4-bsize-2-pretrained-0-dataaug-2-TL-0',
 
-            'project_name': 'debug',
-            'experiment_name': 'process',
+            # 'project_name': 'debug',
+            # 'experiment_name': 'process',
             'seed': 42,
             'device': 'cuda' if torch.cuda.is_available() else 'cpu',
 
-            'resume': False,
+            'resume': True,
             'pretrained': False,
             'checkpoint': {
                 'on_epoch': 1000,
@@ -51,13 +53,13 @@ class StrokeExperiment(Experiment):
             },
             'stdout': {
                 'verbose': True,
-                'on_batch': 1,
+                'on_batch': 1000,
                 'on_epoch': 1
             },
 
             'root': Path('./'),
             'neptune': {
-                # 'id': 'STROK-267',
+                'id': 'STROK-389',
                 'workspace': 'machining',
                 'project': 'stroke',
                 'tags': ['StrokeSeg', 'ResUnetPlus-gn-k05-CombinedVgg-lr1e-4-bsize-2-pretrained-0-dataaug-2-TL-0'],
@@ -75,7 +77,6 @@ class StrokeExperiment(Experiment):
             'validation_batch_size': 4,
         }  # yapf: disable
 
-        self.alpha = 0.333
         # Create netcdf4 file for faster reading
         # Stroke(root=Path('./input/stroke')).for_classification()
         # Stroke(root=Path('./input/stroke')).for_segmentation()
@@ -93,10 +94,14 @@ class StrokeExperiment(Experiment):
                                  norm_type='gn',
                                  upsample_type='bilinear')
 
-        # self.model = ResUnet(in_features=3,
-        #                      out_features=3,
-        #                      k=0.5,
-        #                      norm_type='gn')
+        # self.model = RecursiveModel(ResUnetPlus(in_features=6,
+        #                                         out_features=3,
+        #                                         k=0.5,
+        #                                         norm_type='gn',
+        #                                         upsample_type='bilinear'),
+        #                             K=2,
+        #                             device=self.params['device'])
+
         print(self.model)
 
         self.transform = A.Compose([
@@ -144,12 +149,23 @@ class StrokeExperiment(Experiment):
 
         self.trainer = DemoTrainer(
             model=self.model,
-            # criterion=IoULoss(),
             criterion=CombinedVGGLoss(main_criterion=IoULoss(),
-                                      vgg_criterion=nn.MSELoss(),
+                                      vgg_criterion=VGGLoss(
+                                          extractor=VGGExtractor(device=self.params['device']),
+                                          criterion=nn.MSELoss(),
+                                          device=self.params['device']),
                                       balance=[1, 0.1],
-                                      device=self.params['device']),
+                                      ),
+
+            # criterion=CombinedVGGLoss(main_criterion=RecurisiveLoss(IoULoss()),
+            #                           vgg_criterion=RecurisiveLoss(VGGLoss(extractor=VGGExtractor(),
+            #                                                                criterion=nn.MSELoss(),
+            #                                                                device=self.params['device'])),
+            #                           balance=[1, 0.1],
+            #                           device=self.params['device']),
+
             metrics=[local_metrics.IoU,
+                     local_metrics.DiceScore,
                      local_metrics.F1_Class1,
                      local_metrics.F1_Class2],
             hyperparams=self.hyperparams,

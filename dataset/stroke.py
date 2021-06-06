@@ -186,11 +186,19 @@ class StrokeClassificationTorch(BaseTorchDataset):
 class StrokeSegmentationDataset:
     # KANAMA: channel Green - 1
     # ISKEMI: channel Blue  - 2
-    def __init__(self, root, transform=None, val_transform=None, test_size=0.25):
+    def __init__(self,
+                 root,
+                 transform=None,
+                 val_transform=None,
+                 test_size=0.25,
+                 debug=False):
         self.root = root  # Path('./input/stroke')
 
         dataset = xr.open_dataset(self.root / 'nc/stroke-segmentation.nc')
 
+        if debug:
+            _id = np.random.permutation(dataset.id.values)[:100]
+            dataset = dataset.sel({'id': _id})
         train_ids, test_ids = train_test_split(dataset.id.values,
                                                test_size=test_size,
                                                random_state=42,
@@ -216,39 +224,24 @@ class StrokeSegmentationTorch(BaseTorchDataset):
         self.transform = transform
 
     def __getitem__(self, ix):
-        image = self.images[ix]
-        mask = self.masks[ix]
-        mask = mask / 255
-        # mask = mask.permute(2, 0, 1)
-        mask[2, :, :] *= 2
-        mask = mask[int(np.max(mask)), :, :]
+        image = self.images[ix]  # CHW (3, 512, 512)
+        _mask = self.masks[ix]  # CHW (3, 512, 512)
 
-        image = np.transpose(image, axes=(1, 2, 0))
-        # mask = np.transpose(mask, axes=(1, 2, 0))
+        C, H, W = _mask.shape
+
+        image = np.transpose(image, axes=(1, 2, 0))  # HWC
+
+        mask = np.zeros(shape=(H, W))
+        mask[_mask[1] == 255] = 1
+        mask[_mask[2] == 255] = 2
 
         if self.transform is not None:
             sample = self.transform(image=image, mask=mask)
             image = sample['image']
             mask = sample['mask']
 
-            # image = image.permute(2, 0, 1)
             image = image / 255.
-
-
-            # image = TF.resize(image, (256, 256))
-
-            mask = mask.type(torch.LongTensor)
-
-            # mask = mask / 255
-            # # mask = mask.permute(2, 0, 1)
-            # mask[2, :, :] *= 2
-            # mask = mask.type(torch.LongTensor)
-            #
-            # mask = mask[torch.max(mask), :, :]
-
-            # mask = mask.permute(1, 0, 2)
-            # image = self.transform(image)
-            # mask = self.transform(mask)
+            mask = mask.long()
 
         return {'data': image, 'target': mask}
 

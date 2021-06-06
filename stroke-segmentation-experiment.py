@@ -15,37 +15,39 @@ import albumentations as A
 import albumentations.pytorch as Ap
 
 from berries.experiments.experiment import Experiment
-from berries.metric import metrics
 from berries.logger import MultiLogger
+from berries import loss as berries_loss
 
 from dataset.stroke import StrokeSegmentationDataset
-from model.ResUnetPlus import ResUnetPlus
-from model.ResUnet import ResUnet
-from model.XNET import XNET
-from model.RecrusiveFramework import RecursiveModel
-from trainer.demo import DemoTrainer
-from metric import seg_metrics as local_metrics
+from model.res_unet_plus import ResUnetPlus
+from model.res_unet import ResUnet
+from model.xnet import XNET
+
+from trainer.segmentation import SegmentationTrainer
 from dataset.stroke import Stroke
-from loss.losses import DiceLoss, IoULoss, TrevskyLoss, FocalLoss, EnhancedMixingLoss, VGGLoss, VGGExtractor, \
-    CombinedVGGLoss, RecursiveCombinedVGGLoss
+
+from metric.segmentation import IoU, DiceScore, F1_Class1, F1_Class2
+import loss.loss as local_loss
+
+import torchmetrics
 
 
 class StrokeExperiment(Experiment):
     def __init__(self):
         self.params = {
             'project_name': 'stroke',
-            'experiment_name': 'ResUnetPlus-gn-k05-CombinedVgg-lr1e-4-bsize-2-pretrained-0-dataaug-2-TL-0',
+            'experiment_name':
+            'ResUnetPlus-gn-k05-CombinedVgg-lr1e-4-bsize-16',
 
             # 'project_name': 'debug',
             # 'experiment_name': 'process',
             'seed': 42,
             'device': 'cuda' if torch.cuda.is_available() else 'cpu',
-
-            'resume': True,
+            'resume': False,
             'pretrained': False,
             'checkpoint': {
                 'on_epoch': 1000,
-                'metric': local_metrics.IoU.__name__.lower(),
+                'metric': IoU.__name__.lower(),
                 'trigger': lambda new, old: new > old
             },
             'log': {
@@ -53,28 +55,34 @@ class StrokeExperiment(Experiment):
             },
             'stdout': {
                 'verbose': True,
-                'on_batch': 1000,
-                'on_epoch': 1
+                'on_epoch': 1,
+                'on_batch': 10
             },
-
             'root': Path('./'),
             'neptune': {
-                'id': 'STROK-389',
+                # 'id': 'STROK-389',
                 'workspace': 'machining',
                 'project': 'stroke',
-                'tags': ['StrokeSeg', 'ResUnetPlus-gn-k05-CombinedVgg-lr1e-4-bsize-2-pretrained-0-dataaug-2-TL-0'],
-                # 'tags': ['StrokeSeg', 'debug'],
-
-                'source_files': ['./stroke-experiment.py']
+                'tags': [
+                    'StrokeSeg',
+                    'ResUnetPlus(gn, k=0.5)',
+                    'CombinedVgg',
+                    'lr:1e-4',
+                    'bsize:16'
+                ],
+                'source_files': ['./stroke-segmentation-experiment.py']
             }
-        }
+        } # yapf: disable
 
         self.hyperparams = {
             'lr': 0.0001,
             'weight_decay': 0.,
             'epoch': 500,
-            'batch_size': 4,
-            'validation_batch_size': 4,
+            'batch_size': 16,
+            'validation_batch_size': 16,
+            'recursive':{
+                'K':3
+            }
         }  # yapf: disable
 
         # Create netcdf4 file for faster reading
@@ -88,46 +96,53 @@ class StrokeExperiment(Experiment):
         #                   norm_type='gn',
         #                   upsample_type='bilinear')
 
-        self.model = ResUnetPlus(in_features=3,
+        self.model = ResUnetPlus(in_features=3 *
+                                 (2 if 'recursive' in self.hyperparams else 1),
                                  out_features=3,
                                  k=0.5,
                                  norm_type='gn',
                                  upsample_type='bilinear')
 
-        # self.model = RecursiveModel(ResUnetPlus(in_features=6,
-        #                                         out_features=3,
-        #                                         k=0.5,
-        #                                         norm_type='gn',
-        #                                         upsample_type='bilinear'),
-        #                             K=2,
-        #                             device=self.params['device'])
-
         print(self.model)
 
         self.transform = A.Compose([
+            A.Resize(256, 256),
+            A.CenterCrop(224, 224),
             A.ShiftScaleRotate(shift_limit=0.01,
                                scale_limit=0.01,
                                rotate_limit=180,
                                p=0.5),
             A.HorizontalFlip(p=0.5),
             A.VerticalFlip(p=0.5),
-            A.OneOf([A.GridDistortion(p=0.5),
-                     A.ElasticTransform(p=0.5),
-                     A.OpticalDistortion(p=0.5, distort_limit=2, shift_limit=0.5)],
+            A.OneOf([
+                A.GridDistortion(p=0.5),
+                A.ElasticTransform(p=0.5),
+                A.OpticalDistortion(p=0.5, distort_limit=2, shift_limit=0.5)
+            ],
                     p=0.2),
             A.GridDropout(p=0.2, random_offset=True, mask_fill_value=None),
             A.OneOf([A.GaussianBlur(p=0.5),
                      A.GlassBlur(p=0.5)], p=0.2),
-            A.ColorJitter(p=0.2, brightness=0.4, contrast=0.4, saturation=0.4, hue=0.4),
+            A.ColorJitter(p=0.2,
+                          brightness=0.4,
+                          contrast=0.4,
+                          saturation=0.4,
+                          hue=0.4),
             A.GaussNoise(p=0.2),
             Ap.ToTensorV2()
         ])
 
-        self.val_transform = A.Compose([Ap.ToTensorV2()])
-        self.dataset = StrokeSegmentationDataset(Path('../stroke-segmentation-challenge/input/stroke'),
-                                                 transform=self.transform,
-                                                 val_transform=self.val_transform,
-                                                 test_size=0.25)
+        self.val_transform = A.Compose(
+            [A.Resize(256, 256),
+             A.CenterCrop(224, 224),
+             Ap.ToTensorV2()])
+
+        self.dataset = StrokeSegmentationDataset(
+            Path('./input/teknofest'),
+            transform=self.transform,
+            val_transform=self.val_transform,
+            test_size=0.25,
+            debug=False)
 
         self.logger = MultiLogger(
             root=self.params['root'],
@@ -137,41 +152,37 @@ class StrokeExperiment(Experiment):
             hyperparams=self.hyperparams)
 
         self.optimizer = Adam(params=self.model.parameters(),
-                              lr=self.hyperparams.get('lr', 0.001),
-                              weight_decay=self.hyperparams.get(
-                                  'weight_decay', 0))
+                              lr=self.hyperparams['lr'],
+                              weight_decay=self.hyperparams['weight_decay'])
 
         # Decay LR by a factor of 0.1 every 7 epochs
-        self.exp_lr_scheduler = lr_scheduler.StepLR(self.optimizer,
-                                                    step_size=7,
-                                                    gamma=0.1,
-                                                    verbose=False)
+        # self.exp_lr_scheduler = lr_scheduler.StepLR(self.optimizer,
+        #                                             step_size=7,
+        #                                             gamma=0.1,
+        #                                             verbose=False)
 
-        self.trainer = DemoTrainer(
+        self.trainer = SegmentationTrainer(
             model=self.model,
-            criterion=CombinedVGGLoss(main_criterion=IoULoss(),
-                                      vgg_criterion=VGGLoss(
-                                          extractor=VGGExtractor(device=self.params['device']),
-                                          criterion=nn.MSELoss(),
-                                          device=self.params['device']),
-                                      balance=[1, 0.1],
-                                      ),
-
-            # criterion=CombinedVGGLoss(main_criterion=RecurisiveLoss(IoULoss()),
-            #                           vgg_criterion=RecurisiveLoss(VGGLoss(extractor=VGGExtractor(),
-            #                                                                criterion=nn.MSELoss(),
-            #                                                                device=self.params['device'])),
-            #                           balance=[1, 0.1],
-            #                           device=self.params['device']),
-
-            metrics=[local_metrics.IoU,
-                     local_metrics.DiceScore,
-                     local_metrics.F1_Class1,
-                     local_metrics.F1_Class2],
+            criterion=local_loss.CombinedVGGLoss(
+                main_criterion=berries_loss.EnhancedMixingLoss(
+                    reduction='none'),
+                vgg_criterion=local_loss.VGGLoss(
+                    extractor=local_loss.VGGExtractor(
+                        device=self.params['device']),
+                    criterion=nn.MSELoss(reduction='none'),
+                    reduction='none',
+                    device=self.params['device']),
+                weight=[1, 0.1],
+                reduction='none'),
+            metrics=[
+                IoU(num_classes=3),
+                DiceScore(),
+                F1_Class1(),
+                F1_Class2()
+            ],
             hyperparams=self.hyperparams,
             params=self.params,
-            logger=self.logger
-        )
+            logger=self.logger)
 
     def run(self):
         self.trainer.fit(dataset=self.dataset.trainset,

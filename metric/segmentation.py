@@ -11,7 +11,8 @@ class Accuracy(nn.Module):
 
     def forward(self, yhat, y):
         preds = (torch.argmax(yhat, dim=1))
-        acc = (torch.sum(preds == y)) / (preds.size(0) * preds.size(1) * preds.size(2))
+        acc = (torch.sum(preds == y)) / (preds.size(0) * preds.size(1) *
+                                         preds.size(2))
         return acc.numpy().item()
 
 
@@ -54,17 +55,18 @@ class IoU(torch.nn.Module):
         self.reduction = reduction
 
     def forward(self, yhat, y, eps=1e-7):
-        true_1_hot = torch.eye(self.num_classes)[y.type(torch.LongTensor).squeeze(1)]
+        true_1_hot = torch.eye(self.num_classes)[y.type(
+            torch.LongTensor).squeeze(1)]
         true_1_hot = true_1_hot.permute(0, 3, 1, 2).float()
         probas1 = F.softmax(yhat, dim=1)
         probas1 = torch.argmax(probas1, dim=1)
 
-        probas = torch.zeros((len(yhat), 3, 512, 512))
+        probas = torch.zeros_like(yhat)
         probas[probas1 == 1, 1] = 1
         probas[probas1 == 2, 2] = 1
 
         true_1_hot = true_1_hot.type(yhat.type())
-        dims = (0,) + tuple(range(2, y.ndimension()))
+        dims = (0, ) + tuple(range(2, y.ndimension()))
         intersection = torch.sum(probas * true_1_hot, dims)
         cardinality = torch.sum(probas + true_1_hot, dims)
         union = cardinality - intersection
@@ -80,19 +82,21 @@ class DiceScore(torch.nn.Module):
         self.smooth = smooth
 
     def forward(self, yhat, y, eps=1e-7):
-        true_1_hot = torch.eye(self.num_classes)[y.type(torch.LongTensor).squeeze(1)]
+        true_1_hot = torch.eye(self.num_classes)[y.type(
+            torch.LongTensor).squeeze(1)]
         true_1_hot = true_1_hot.permute(0, 3, 1, 2).float()
         probas1 = F.softmax(yhat, dim=1)
         probas1 = torch.argmax(probas1, dim=1)
 
-        probas = torch.zeros((len(yhat), 3, 512, 512))
+        probas = torch.zeros_like(yhat)
         probas[probas1 == 1, 1] = 1
         probas[probas1 == 2, 2] = 1
         true_1_hot = true_1_hot.type(yhat.type())
-        dims = (0,) + tuple(range(2, y.ndimension()))
+        dims = (0, ) + tuple(range(2, y.ndimension()))
         intersection = torch.sum(probas * true_1_hot, dims)
         cardinality = torch.sum(probas + true_1_hot, dims)
-        dice_loss = ((2. * intersection + self.smooth) / (cardinality + eps + self.smooth)).mean()
+        dice_loss = ((2. * intersection + self.smooth) /
+                     (cardinality + eps + self.smooth)).mean()
         return dice_loss.numpy().item()
 
 
@@ -243,7 +247,6 @@ class Specificity(nn.Module):
 
 
 class MeanMetric(nn.Module):
-
     def __init__(self):
         super().__init__()
         self.recall = Recall()

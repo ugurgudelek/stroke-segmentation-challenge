@@ -32,6 +32,7 @@ class DiceLoss(torch.nn.Module):
 
         loss = 1 - dice_loss
 
+        assert loss.shape[0] == target.shape[0]
         if self.reduction == 'sum': return torch.sum(loss)
         if self.reduction == 'mean': return torch.mean(loss)
         return loss
@@ -53,6 +54,7 @@ class FocalLoss(torch.nn.Module):
         pt = torch.exp(-ce_loss)
         loss = (self.alpha * ((1 - pt)**self.gamma) * ce_loss)
 
+        assert loss.shape[0] == target.shape[0]
         if self.reduction == 'sum': return torch.sum(loss)
         if self.reduction == 'mean': return torch.mean(loss)
         return loss
@@ -61,8 +63,10 @@ class FocalLoss(torch.nn.Module):
 class EnhancedMixingLoss(torch.nn.Module):
     def __init__(self, gamma=1.1, alpha=0.48, smooth=1., reduction='mean'):
         super(EnhancedMixingLoss, self).__init__()
-        self.focal_loss = FocalLoss(gamma=gamma, alpha=alpha)
-        self.dice_loss = DiceLoss(smooth=smooth)
+        self.focal_loss = FocalLoss(gamma=gamma,
+                                    alpha=alpha,
+                                    reduction=reduction)
+        self.dice_loss = DiceLoss(smooth=smooth, reduction=reduction)
         self.reduction = reduction
 
     def forward(self, logit, target):
@@ -70,6 +74,10 @@ class EnhancedMixingLoss(torch.nn.Module):
         dcloss = self.dice_loss(logit, target)
 
         loss = fcloss - torch.log(dcloss)
+
+        assert loss.shape[0] == target.shape[0]
+        if self.reduction == 'sum': return torch.sum(loss)
+        if self.reduction == 'mean': return torch.mean(loss)
         return loss
 
 
@@ -80,17 +88,29 @@ class IoULoss(torch.nn.Module):
         self.reduction = reduction
 
     def forward(self, logit, target, eps=1e-7):
+        B = target.shape[0]
         target_1_hot = torch.eye(self.num_classes)[target.squeeze(1)]
         target_1_hot = target_1_hot.permute(0, 3, 1, 2).float()
         probas = F.softmax(logit, dim=1)
 
         target_1_hot = target_1_hot.type(logit.type())
-        dims = (0, ) + tuple(range(2, target.ndimension()))
-        intersection = torch.sum(probas * target_1_hot, dims)
-        cardinality = torch.sum(probas + target_1_hot, dims)
-        union = cardinality - intersection
-        jacc_loss = (intersection / (union + eps)).mean()
-        return 1 - jacc_loss
+
+        intersection = probas * target_1_hot
+        union = probas + target_1_hot - intersection
+
+        # BCHW -> BC
+        intersection = intersection.view(B, self.num_classes, -1).sum(2)
+        union = union.view(B, self.num_classes, -1).sum(2)
+
+        jacc_loss = (intersection / (union + eps))
+        loss = 1 - jacc_loss
+
+        # BC -> B
+        loss = loss.mean(dim=1)
+
+        if self.reduction == 'sum': return torch.sum(loss)
+        if self.reduction == 'mean': return torch.mean(loss)
+        return loss
 
 
 class TrevskyLoss(torch.nn.Module):
@@ -155,9 +175,10 @@ class VGGLoss(nn.Module):
         super(VGGLoss, self).__init__()
         self.extractor = extractor
         self.criterion = criterion
+        # assert self.criterion.reduction == 'mean'
         self.num_classes = num_classes
-        self.reduction = reduction
         self.device = device
+        self.reduction = reduction
 
     def forward(self, preds, target):
 
@@ -174,11 +195,11 @@ class VGGLoss(nn.Module):
         loss = 0.
         for j in range(N):
             _loss = self.criterion(probs[j], target_hot[j])
-            _loss = torch.mean(_loss, dim=(1, 2, 3))
+            _loss = _loss.mean(dim=(1, 2, 3))
             loss += _loss
-
         loss = loss / N
 
+        assert loss.shape[0] == target.shape[0]
         if self.reduction == 'sum':
             return torch.sum(loss)
         if self.reduction == 'mean':
@@ -191,7 +212,7 @@ class CombinedVGGLoss(nn.Module):
                  main_criterion,
                  vgg_criterion,
                  weight=[1, 0.1],
-                 reduction='none'):
+                 reduction='mean'):
         super(CombinedVGGLoss, self).__init__()
         self.vgg_criterion = vgg_criterion
         self.main_criterion = main_criterion
@@ -202,6 +223,7 @@ class CombinedVGGLoss(nn.Module):
         loss = self.weight[0] * self.main_criterion(pred, target) +\
             self.weight[1] * self.vgg_criterion(pred, target)
 
+        assert loss.shape[0] == target.shape[0]
         if self.reduction == 'sum':
             return torch.sum(loss)
         if self.reduction == 'mean':

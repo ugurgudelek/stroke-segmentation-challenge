@@ -35,7 +35,7 @@ import torchmetrics
 class StrokeExperiment(Experiment):
     def __init__(self):
         self.params = {
-            'project_name': 'stroke',
+            'project_name': 'debug',
             'experiment_name':
             'ResUnetPlus-gn-k05-CombinedVgg-lr1e-4-bsize-16',
 
@@ -65,8 +65,9 @@ class StrokeExperiment(Experiment):
                 'project': 'stroke',
                 'tags': [
                     'StrokeSeg',
+                    'Recursive',
                     'ResUnetPlus(gn, k=0.5)',
-                    'CombinedVgg',
+                    'CombinedVgg', 'IoULoss', 'VGGLoss'
                     'lr:1e-4',
                     'bsize:16'
                 ],
@@ -164,11 +165,9 @@ class StrokeExperiment(Experiment):
         self.trainer = SegmentationTrainer(
             model=self.model,
             criterion=local_loss.CombinedVGGLoss(
-                main_criterion=berries_loss.EnhancedMixingLoss(
-                    reduction='none'),
+                main_criterion=local_loss.IoULoss(reduction='none'),
                 vgg_criterion=local_loss.VGGLoss(
-                    extractor=local_loss.VGGExtractor(
-                        device=self.params['device']),
+                    extractor=local_loss.VGGExtractor(device=self.params['device']),
                     criterion=nn.MSELoss(reduction='none'),
                     reduction='none',
                     device=self.params['device']),
@@ -182,7 +181,7 @@ class StrokeExperiment(Experiment):
             ],
             hyperparams=self.hyperparams,
             params=self.params,
-            logger=self.logger)
+            logger=self.logger) # yapf:disable
 
     def run(self):
         self.trainer.fit(dataset=self.dataset.trainset,

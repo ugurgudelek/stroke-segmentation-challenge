@@ -100,11 +100,13 @@ class DiceScore(torch.nn.Module):
         return dice_loss.numpy().item()
 
 
-class F1_Class1(nn.Module):
-    def __init__(self, in_class=1, eps=1e-6):
+class FBeta(nn.Module):
+    def __init__(self, in_class, beta=1, eps=1e-6):
         super().__init__()
-        self.eps = eps
+
         self.in_class = in_class
+        self.beta = beta
+        self.eps = eps
 
     def forward(self, yhat, y):
         yhat = F.softmax(yhat, dim=1)
@@ -113,23 +115,10 @@ class F1_Class1(nn.Module):
         TP = torch.sum((preds == self.in_class) * (y == self.in_class))
         FN = torch.sum((preds == 0) * (y == self.in_class))
         FP = torch.sum((preds == self.in_class) * (y == 0))
-        return (TP / (TP + 0.5 * (FP + FN) + self.eps)).numpy().item()
 
-
-class F1_Class2(nn.Module):
-    def __init__(self, in_class=2, eps=1e-6):
-        super().__init__()
-        self.eps = eps
-        self.in_class = in_class
-
-    def forward(self, yhat, y):
-        yhat = F.softmax(yhat, dim=1)
-        preds = torch.argmax(yhat, dim=1)
-        preds[preds != self.in_class] = 0
-        TP = torch.sum((preds == self.in_class) * (y == self.in_class))
-        FN = torch.sum((preds == 0) * (y == self.in_class))
-        FP = torch.sum((preds == self.in_class) * (y == 0))
-        return (TP / (TP + 0.5 * (FP + FN) + self.eps)).numpy().item()
+        f_beta = ((1 + self.beta**2) * TP) /\
+            ((1 + self.beta**2) * TP + (self.beta**2) * FN + FP)
+        return f_beta.numpy().item()
 
 
 class Precision_class1(nn.Module):

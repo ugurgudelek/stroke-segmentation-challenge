@@ -35,12 +35,12 @@ import torchmetrics
 class StrokeExperiment(Experiment):
     def __init__(self):
         self.params = {
-            'project_name': 'debug',
-            'experiment_name':
-            'ResUnetPlus-gn-k05-CombinedVgg-lr1e-4-bsize-16',
 
-            # 'project_name': 'debug',
-            # 'experiment_name': 'process',
+            # 'experiment_name':
+            # 'ResUnetPlus-gn-k1-CombinedVgg-lr1e-4-bsize-12',
+
+            'project_name': 'debug',
+            'experiment_name': 'stroke',
             'seed': 42,
             'device': 'cuda' if torch.cuda.is_available() else 'cpu',
             'resume': False,
@@ -56,7 +56,7 @@ class StrokeExperiment(Experiment):
             'stdout': {
                 'verbose': True,
                 'on_epoch': 1,
-                'on_batch': 10
+                'on_batch': 1
             },
             'root': Path('./'),
             'neptune': {
@@ -65,24 +65,24 @@ class StrokeExperiment(Experiment):
                 'project': 'stroke',
                 'tags': [
                     'StrokeSeg',
-                    'Recursive',
-                    'ResUnetPlus(gn, k=0.5)',
+                    'Recursive=3',
+                    'ResUnetPlus(gn, 1=0.5)',
                     'CombinedVgg', 'IoULoss', 'VGGLoss'
-                    'lr:1e-4',
-                    'bsize:16'
+                                              'lr:1e-4',
+                    'bsize:12'
                 ],
                 'source_files': ['./stroke-segmentation-experiment.py']
             }
-        } # yapf: disable
+        }  # yapf: disable
 
         self.hyperparams = {
             'lr': 0.0001,
             'weight_decay': 0.,
             'epoch': 500,
-            'batch_size': 16,
-            'validation_batch_size': 16,
-            'recursive':{
-                'K':3
+            'batch_size': 4,
+            'validation_batch_size': 4,
+            'recursive': {
+                'K': 3
             }
         }  # yapf: disable
 
@@ -98,17 +98,17 @@ class StrokeExperiment(Experiment):
         #                   upsample_type='bilinear')
 
         self.model = ResUnetPlus(in_features=3 *
-                                 (2 if 'recursive' in self.hyperparams else 1),
+                                             (2 if 'recursive' in self.hyperparams else 1),
                                  out_features=3,
                                  k=0.5,
-                                 norm_type='gn',
+                                 norm_type='bn',
                                  upsample_type='bilinear')
 
         print(self.model)
 
         self.transform = A.Compose([
-            A.Resize(256, 256),
-            A.CenterCrop(224, 224),
+            # A.Resize(256, 256),
+            # A.CenterCrop(224, 224),
             A.ShiftScaleRotate(shift_limit=0.01,
                                scale_limit=0.01,
                                rotate_limit=180,
@@ -120,7 +120,7 @@ class StrokeExperiment(Experiment):
                 A.ElasticTransform(p=0.5),
                 A.OpticalDistortion(p=0.5, distort_limit=2, shift_limit=0.5)
             ],
-                    p=0.2),
+                p=0.2),
             A.GridDropout(p=0.2, random_offset=True, mask_fill_value=None),
             A.OneOf([A.GaussianBlur(p=0.5),
                      A.GlassBlur(p=0.5)], p=0.2),
@@ -133,10 +133,13 @@ class StrokeExperiment(Experiment):
             Ap.ToTensorV2()
         ])
 
+        # self.val_transform = A.Compose(
+        #     [A.Resize(256, 256),
+        #      A.CenterCrop(224, 224),
+        #      Ap.ToTensorV2()])
+        #
         self.val_transform = A.Compose(
-            [A.Resize(256, 256),
-             A.CenterCrop(224, 224),
-             Ap.ToTensorV2()])
+            [Ap.ToTensorV2()])
 
         self.dataset = StrokeSegmentationDataset(
             Path('./input/teknofest'),
@@ -152,6 +155,17 @@ class StrokeExperiment(Experiment):
             params=self.params,
             hyperparams=self.hyperparams)
 
+        self.criterion = local_loss.CombinedVGGLoss(
+            main_criterion=local_loss.IoULoss(reduction='none'),
+            vgg_criterion=local_loss.VGGLoss(
+                extractor=local_loss.VGGExtractor(device=self.params['device']),
+                criterion=nn.MSELoss(reduction='none'),
+                reduction='none',
+                device=self.params['device']),
+            weight=[1, 0.1],
+            reduction='none')
+
+
         self.optimizer = Adam(params=self.model.parameters(),
                               lr=self.hyperparams['lr'],
                               weight_decay=self.hyperparams['weight_decay'])
@@ -164,15 +178,7 @@ class StrokeExperiment(Experiment):
 
         self.trainer = SegmentationTrainer(
             model=self.model,
-            criterion=local_loss.CombinedVGGLoss(
-                main_criterion=local_loss.IoULoss(reduction='none'),
-                vgg_criterion=local_loss.VGGLoss(
-                    extractor=local_loss.VGGExtractor(device=self.params['device']),
-                    criterion=nn.MSELoss(reduction='none'),
-                    reduction='none',
-                    device=self.params['device']),
-                weight=[1, 0.1],
-                reduction='none'),
+            criterion=self.criterion,
             metrics=[
                 IoU(num_classes=3),
                 DiceScore(),
@@ -181,7 +187,7 @@ class StrokeExperiment(Experiment):
             ],
             hyperparams=self.hyperparams,
             params=self.params,
-            logger=self.logger) # yapf:disable
+            logger=self.logger)  # yapf:disable
 
     def run(self):
         self.trainer.fit(dataset=self.dataset.trainset,

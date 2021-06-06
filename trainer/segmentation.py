@@ -49,7 +49,7 @@ class SegmentationTrainer(BaseTrainer):
 
                     # calculate gradient with backpropagation
                     if self.criterion.reduction == 'none':
-                        loss.sum().backward()
+                        loss.mean().backward()
                     else:
                         loss.backward()
 
@@ -64,18 +64,16 @@ class SegmentationTrainer(BaseTrainer):
                         torch.cat((data.detach(), output.detach()), dim=1))
 
                     _loss = self.compute_loss(output, target.detach())
-                    _loss *= (1 / coeff)
+                    _loss *= ((i + 1) / coeff)
 
                     if train:
                         if self.criterion.reduction == 'none':
-                            _loss.sum().backward()
+                            _loss.mean().backward()
                         else:
                             _loss.backward()
 
                     _loss = _loss.detach()
                     loss += _loss
-
-                loss /= K
 
             if train:
 

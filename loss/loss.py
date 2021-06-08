@@ -20,17 +20,21 @@ class DiceLoss(torch.nn.Module):
         self.smooth = smooth
 
     def forward(self, logit, target, eps=1e-7):
+        B = target.shape[0]
         target_1_hot = torch.eye(self.num_classes)[target.squeeze(1)]
         target_1_hot = target_1_hot.permute(0, 3, 1, 2).float()
         probas = F.softmax(logit, dim=1)
         target_1_hot = target_1_hot.type(logit.type())
-        dims = (0, ) + tuple(range(2, target.ndimension()))
-        intersection = torch.sum(probas * target_1_hot, dims)
-        cardinality = torch.sum(probas + target_1_hot, dims)
+        intersection = probas * target_1_hot
+        cardinality = probas + target_1_hot
+
+        intersection = intersection.view(B, self.num_classes, -1).sum(2)
+        cardinality = cardinality.view(B, self.num_classes, -1).sum(2)
         dice_loss = ((2. * intersection + self.smooth) /
                      (cardinality + eps + self.smooth))
 
         loss = 1 - dice_loss
+        loss = loss.mean(dim=1)
 
         assert loss.shape[0] == target.shape[0]
         if self.reduction == 'sum': return torch.sum(loss)
@@ -52,7 +56,7 @@ class FocalLoss(torch.nn.Module):
                                   reduction=self.reduction,
                                   weight=self.weight)
         pt = torch.exp(-ce_loss)
-        loss = (self.alpha * ((1 - pt)**self.gamma) * ce_loss)
+        loss = (self.alpha * ((1 - pt) ** self.gamma) * ce_loss)
 
         assert loss.shape[0] == target.shape[0]
         if self.reduction == 'sum': return torch.sum(loss)
@@ -125,7 +129,7 @@ class TrevskyLoss(torch.nn.Module):
         probas = F.softmax(logit, dim=1)
 
         true_1_hot = true_1_hot.type(logit.type())
-        dims = (0, ) + tuple(range(2, true.ndimension()))
+        dims = (0,) + tuple(range(2, true.ndimension()))
         intersection = torch.sum(probas * true_1_hot, dims)
         fps = torch.sum(probas * (1 - true_1_hot), dims)
         fns = torch.sum((1 - probas) * true_1_hot, dims)
@@ -142,10 +146,10 @@ class VGGExtractor(nn.Module):
         self.layers = layers
         self.mu = torch.tensor([0.485, 0.456, 0.406],
                                requires_grad=False).view(
-                                   (1, 3, 1, 1)).to(device)
+            (1, 3, 1, 1)).to(device)
         self.sigma = torch.tensor([0.229, 0.224, 0.225],
                                   requires_grad=False).view(
-                                      (1, 3, 1, 1)).to(device)
+            (1, 3, 1, 1)).to(device)
         features = torchvision.models.vgg19(
             pretrained=True).features[:max(layers) + 1].to(device)
         for param in features.parameters():
@@ -207,21 +211,21 @@ class VGGLoss(nn.Module):
         return loss
 
 
-class CombinedVGGLoss(nn.Module):
+class CombinedLoss(nn.Module):
     def __init__(self,
                  main_criterion,
-                 vgg_criterion,
+                 combined_criterion,
                  weight=[1, 0.1],
                  reduction='mean'):
-        super(CombinedVGGLoss, self).__init__()
-        self.vgg_criterion = vgg_criterion
+        super(CombinedLoss, self).__init__()
+        self.combined_criterion = combined_criterion
         self.main_criterion = main_criterion
         self.weight = weight
         self.reduction = reduction
 
     def forward(self, pred, target):
-        loss = self.weight[0] * self.main_criterion(pred, target) +\
-            self.weight[1] * self.vgg_criterion(pred, target)
+        loss = self.weight[0] * self.main_criterion(pred, target) + \
+               self.weight[1] * self.combined_criterion(pred, target)
 
         assert loss.shape[0] == target.shape[0]
         if self.reduction == 'sum':
@@ -230,6 +234,48 @@ class CombinedVGGLoss(nn.Module):
             return torch.mean(loss)
         return loss
 
+
+from scipy.ndimage import distance_transform_edt as distance
+from skimage import segmentation as skimage_seg
+
+
+class BoundaryLoss(nn.Module):
+    def __init__(self, reduction='mean', device='cuda'):
+        super(BoundaryLoss, self).__init__()
+        self.reduction = reduction
+        self.device = device
+
+    def forward(self, pred, target):
+
+        out_shape = pred.shape
+
+        img_gt = target.type(torch.uint8)
+        gt_sdf = torch.zeros(out_shape)
+
+        for b in range(out_shape[0]):
+            for c in range(1, out_shape[1]):
+                posmask = img_gt[b] / (1 if img_gt[b].max() == 0 else img_gt[b].max())
+                negmask = 1 - posmask
+                posdis = torch.tensor(distance(posmask.detach().cpu().numpy()), dtype=torch.uint8).to(self.device)
+                negdis = torch.tensor(distance(negmask.detach().cpu().numpy()), dtype=torch.uint8).to(self.device)
+                boundary = torch.tensor(skimage_seg.find_boundaries(posmask.detach().cpu().numpy(), mode='inner'),
+                                        dtype=torch.uint8).to(self.device)
+                sdf = negdis - posdis
+                sdf[boundary == 1] = 0
+                gt_sdf[b][c] = sdf
+
+        pred = F.softmax(pred, dim=1)
+        pc = pred[:, 1:, ...]
+        dc = gt_sdf[:, 1:, ...].to(self.device)
+
+        multipled = torch.einsum("bcxy,bcxy->bcxy", pc, dc)
+        loss = multipled.mean(dim=(1, 2, 3))
+        assert loss.shape[0] == target.shape[0]
+        if self.reduction == 'sum':
+            return torch.sum(loss)
+        if self.reduction == 'mean':
+            return torch.mean(loss)
+        return loss
 
 # class RecursiveCombinedVGGLoss(nn.Module):
 #     def __init__(self, main_criterion, vgg_criterion, balance=[1, 0.1], K=1, reduction='mean'):

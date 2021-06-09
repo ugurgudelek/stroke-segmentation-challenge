@@ -37,7 +37,7 @@ class StrokeExperiment(Experiment):
         self.params = {
             'project_name': 'stroke',
             'experiment_name':
-            'Rec1-ResUnetPlus-gn-k05-CombinedIoU-BD-lr1e-4-bsize-4',
+            'Rec1-ResUnetPlus-gn-k05-CombinedIoU-BD-balanced-lr1e-4-bsize-4',
 
             # 'project_name': 'debug',
             # 'experiment_name': 'stroke',
@@ -67,7 +67,7 @@ class StrokeExperiment(Experiment):
                     'StrokeSeg',
                     'Recursive:1',
                     'ResUnetPlus(gn, k=0.5)',
-                    'CombinedVgg', 'IoULoss', 'BoundaryLoss'
+                    'CombinedVgg', 'IoULoss', 'BoundaryLoss-balanced'
                                               'lr:1e-4',
                     'bsize:4'
                 ],

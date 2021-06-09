@@ -12,6 +12,38 @@ from torch.autograd import Variable
 import torchvision
 
 
+class IoULoss(torch.nn.Module):
+    def __init__(self, num_classes=3, reduction='mean'):
+        super(IoULoss, self).__init__()
+        self.num_classes = num_classes
+        self.reduction = reduction
+
+    def forward(self, logit, target, eps=1e-7):
+        B = target.shape[0]
+        target_1_hot = torch.eye(self.num_classes)[target.squeeze(1)]
+        target_1_hot = target_1_hot.permute(0, 3, 1, 2).float()
+        probas = F.softmax(logit, dim=1)
+
+        target_1_hot = target_1_hot.type(logit.type())
+
+        intersection = probas * target_1_hot
+        union = probas + target_1_hot - intersection
+
+        # BCHW -> BC
+        intersection = intersection.view(B, self.num_classes, -1).sum(2)
+        union = union.view(B, self.num_classes, -1).sum(2)
+
+        jacc_loss = (intersection / (union + eps))
+        loss = 1 - jacc_loss
+
+        # BC -> B
+        loss = loss.mean(dim=1)
+
+        if self.reduction == 'sum': return torch.sum(loss)
+        if self.reduction == 'mean': return torch.mean(loss)
+        return loss
+
+
 class DiceLoss(torch.nn.Module):
     def __init__(self, num_classes=3, smooth=0, reduction='mean'):
         super(DiceLoss, self).__init__()
@@ -80,38 +112,6 @@ class EnhancedMixingLoss(torch.nn.Module):
         loss = fcloss - torch.log(dcloss)
 
         assert loss.shape[0] == target.shape[0]
-        if self.reduction == 'sum': return torch.sum(loss)
-        if self.reduction == 'mean': return torch.mean(loss)
-        return loss
-
-
-class IoULoss(torch.nn.Module):
-    def __init__(self, num_classes=3, reduction='mean'):
-        super(IoULoss, self).__init__()
-        self.num_classes = num_classes
-        self.reduction = reduction
-
-    def forward(self, logit, target, eps=1e-7):
-        B = target.shape[0]
-        target_1_hot = torch.eye(self.num_classes)[target.squeeze(1)]
-        target_1_hot = target_1_hot.permute(0, 3, 1, 2).float()
-        probas = F.softmax(logit, dim=1)
-
-        target_1_hot = target_1_hot.type(logit.type())
-
-        intersection = probas * target_1_hot
-        union = probas + target_1_hot - intersection
-
-        # BCHW -> BC
-        intersection = intersection.view(B, self.num_classes, -1).sum(2)
-        union = union.view(B, self.num_classes, -1).sum(2)
-
-        jacc_loss = (intersection / (union + eps))
-        loss = 1 - jacc_loss
-
-        # BC -> B
-        loss = loss.mean(dim=1)
-
         if self.reduction == 'sum': return torch.sum(loss)
         if self.reduction == 'mean': return torch.mean(loss)
         return loss
@@ -223,9 +223,9 @@ class CombinedLoss(nn.Module):
         self.weight = weight
         self.reduction = reduction
 
-    def forward(self, pred, target):
+    def forward(self, pred, target, epoch=1):
         loss = self.weight[0] * self.main_criterion(pred, target) + \
-               self.weight[1] * self.combined_criterion(pred, target)
+               (epoch * self.weight[1]) * self.combined_criterion(pred, target)
 
         assert loss.shape[0] == target.shape[0]
         if self.reduction == 'sum':
@@ -256,10 +256,22 @@ class BoundaryLoss(nn.Module):
             for c in range(1, out_shape[1]):
                 posmask = img_gt[b] / (1 if img_gt[b].max() == 0 else img_gt[b].max())
                 negmask = 1 - posmask
-                posdis = torch.tensor(distance(posmask.detach().cpu().numpy()), dtype=torch.uint8).to(self.device)
-                negdis = torch.tensor(distance(negmask.detach().cpu().numpy()), dtype=torch.uint8).to(self.device)
-                boundary = torch.tensor(skimage_seg.find_boundaries(posmask.detach().cpu().numpy(), mode='inner'),
-                                        dtype=torch.uint8).to(self.device)
+                posdis = torch.tensor(
+                    distance(
+                        posmask.detach().cpu().numpy()),
+                    dtype=torch.uint8).to(self.device)
+
+                negdis = torch.tensor(
+                    distance(
+                        negmask.detach().cpu().numpy()),
+                    dtype=torch.uint8).to(self.device)
+
+                boundary = torch.tensor(
+                    skimage_seg.find_boundaries(
+                        posmask.detach().cpu().numpy(),
+                        mode='inner'),
+                    dtype=torch.uint8).to(self.device)
+
                 sdf = negdis - posdis
                 sdf[boundary == 1] = 0
                 gt_sdf[b][c] = sdf

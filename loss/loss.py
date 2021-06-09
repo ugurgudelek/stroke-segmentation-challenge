@@ -20,7 +20,8 @@ class IoULoss(torch.nn.Module):
 
     def forward(self, logit, target, eps=1e-7):
         B = target.shape[0]
-        target_1_hot = torch.eye(self.num_classes)[target.squeeze(1)]
+        target_1_hot = torch.eye(self.num_classes)[target.type(
+            torch.LongTensor).squeeze(1)]
         target_1_hot = target_1_hot.permute(0, 3, 1, 2).float()
         probas = F.softmax(logit, dim=1)
 
@@ -53,7 +54,8 @@ class DiceLoss(torch.nn.Module):
 
     def forward(self, logit, target, eps=1e-7):
         B = target.shape[0]
-        target_1_hot = torch.eye(self.num_classes)[target.squeeze(1)]
+        target_1_hot = torch.eye(self.num_classes)[target.type(
+            torch.LongTensor).squeeze(1)]
         target_1_hot = target_1_hot.permute(0, 3, 1, 2).float()
         probas = F.softmax(logit, dim=1)
         target_1_hot = target_1_hot.type(logit.type())
@@ -124,7 +126,8 @@ class TrevskyLoss(torch.nn.Module):
         self.reduction = reduction
 
     def forward(self, logit, true, eps=1e-7):
-        true_1_hot = torch.eye(self.num_classes)[true.squeeze(1)]
+        target_1_hot = torch.eye(self.num_classes)[target.type(
+            torch.LongTensor).squeeze(1)]
         true_1_hot = true_1_hot.permute(0, 3, 1, 2).float()
         probas = F.softmax(logit, dim=1)
 

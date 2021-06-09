@@ -35,12 +35,12 @@ import torchmetrics
 class StrokeExperiment(Experiment):
     def __init__(self):
         self.params = {
-            # 'project_name': 'stroke',
-            # 'experiment_name':
-            # 'Rec1-ResUnetPlus-gn-k05-CombinedIoU-BD-balanced-lr1e-4-bsize-4',
+            'project_name': 'stroke',
+            'experiment_name':
+            'Rec1-ResUnetPlus-gn-k05-CombinedIoU-BD-balanced-weight-lr1e-4-bsize-4',
 
-            'project_name': 'debug',
-            'experiment_name': 'stroke',
+            # 'project_name': 'debug',
+            # 'experiment_name': 'stroke',
             'seed': 42,
             'device': 'cuda' if torch.cuda.is_available() else 'cpu',
             'resume': False,
@@ -56,7 +56,7 @@ class StrokeExperiment(Experiment):
             'stdout': {
                 'verbose': True,
                 'on_epoch': 1,
-                'on_batch': 1
+                'on_batch': 1000
             },
             'root': Path('./'),
             'neptune': {
@@ -67,7 +67,7 @@ class StrokeExperiment(Experiment):
                     'StrokeSeg',
                     'Recursive:1',
                     'ResUnetPlus(gn, k=0.5)',
-                    'CombinedVgg', 'IoULoss', 'BoundaryLoss-balanced'
+                    'CombinedVgg', 'IoULoss', 'BoundaryLoss-balanced-weight'
                                               'lr:1e-4',
                     'bsize:4'
                 ],
@@ -85,7 +85,6 @@ class StrokeExperiment(Experiment):
             'epoch': 500,
             'batch_size': 4,
             'validation_batch_size': 4,
-            # 'weight_increase': True
             # 'recursive': {
             #     'K': 3
             # }
@@ -194,8 +193,8 @@ class StrokeExperiment(Experiment):
             metrics=[
                 IoU(),
                 DiceScore(),
-                # FBeta(in_class=1, beta=1),
-                # FBeta(in_class=2, beta=1)
+                local_loss.IoULoss(reduction='mean'),
+                local_loss.BoundaryLoss(device='cpu', reduction='mean')
             ],
             hyperparams=self.hyperparams,
             params=self.params,

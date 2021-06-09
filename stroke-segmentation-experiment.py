@@ -35,12 +35,12 @@ import torchmetrics
 class StrokeExperiment(Experiment):
     def __init__(self):
         self.params = {
-            'project_name': 'stroke',
-            'experiment_name':
-            'Rec1-ResUnetPlus-gn-k05-CombinedIoU-BD-balanced-lr1e-4-bsize-4',
+            # 'project_name': 'stroke',
+            # 'experiment_name':
+            # 'Rec1-ResUnetPlus-gn-k05-CombinedIoU-BD-balanced-lr1e-4-bsize-4',
 
-            # 'project_name': 'debug',
-            # 'experiment_name': 'stroke',
+            'project_name': 'debug',
+            'experiment_name': 'stroke',
             'seed': 42,
             'device': 'cuda' if torch.cuda.is_available() else 'cpu',
             'resume': False,
@@ -56,7 +56,7 @@ class StrokeExperiment(Experiment):
             'stdout': {
                 'verbose': True,
                 'on_epoch': 1,
-                'on_batch': 1000
+                'on_batch': 1
             },
             'root': Path('./'),
             'neptune': {
@@ -173,6 +173,8 @@ class StrokeExperiment(Experiment):
                                                                                             device=self.params[
                                                                                                 'device']),
                                                  weight=[1, 0.01],
+                                                 balance=True,
+                                                 adopt_weight=True,
                                                  reduction='none'
                                                  )
 

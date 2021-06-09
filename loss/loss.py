@@ -211,30 +211,6 @@ class VGGLoss(nn.Module):
         return loss
 
 
-class CombinedLoss(nn.Module):
-    def __init__(self,
-                 main_criterion,
-                 combined_criterion,
-                 weight=[1, 0.1],
-                 reduction='mean'):
-        super(CombinedLoss, self).__init__()
-        self.combined_criterion = combined_criterion
-        self.main_criterion = main_criterion
-        self.weight = weight
-        self.reduction = reduction
-
-    def forward(self, pred, target, epoch=1):
-        loss = self.weight[0] * self.main_criterion(pred, target) + \
-               (epoch * self.weight[1]) * self.combined_criterion(pred, target)
-
-        assert loss.shape[0] == target.shape[0]
-        if self.reduction == 'sum':
-            return torch.sum(loss)
-        if self.reduction == 'mean':
-            return torch.mean(loss)
-        return loss
-
-
 from scipy.ndimage import distance_transform_edt as distance
 from skimage import segmentation as skimage_seg
 
@@ -282,6 +258,43 @@ class BoundaryLoss(nn.Module):
 
         multipled = torch.einsum("bcxy,bcxy->bcxy", pc, dc)
         loss = multipled.mean(dim=(1, 2, 3))
+        assert loss.shape[0] == target.shape[0]
+        if self.reduction == 'sum':
+            return torch.sum(loss)
+        if self.reduction == 'mean':
+            return torch.mean(loss)
+        return loss
+
+
+class CombinedLoss(nn.Module):
+    def __init__(self,
+                 main_criterion,
+                 combined_criterion,
+                 weight=[1, 0.1],
+                 reduction='mean',
+                 balance=False,
+                 adopt_weight=False):
+        super(CombinedLoss, self).__init__()
+        self.combined_criterion = combined_criterion
+        self.main_criterion = main_criterion
+        self.weight = weight
+        self.reduction = reduction
+        self.adopt_weight = adopt_weight
+        self.balance = balance
+        self.epoch = 1
+
+    def forward(self, pred, target):
+        if self.balance:
+
+            loss = (1 - self.epoch * self.weight[1]) * self.main_criterion(pred, target) + \
+                   (self.epoch * self.weight[1]) * self.combined_criterion(pred, target)
+
+
+        else:
+
+            loss = self.weight[0] * self.main_criterion(pred, target) + \
+                   (epoch * self.weight[1]) * self.combined_criterion(pred, target)
+
         assert loss.shape[0] == target.shape[0]
         if self.reduction == 'sum':
             return torch.sum(loss)

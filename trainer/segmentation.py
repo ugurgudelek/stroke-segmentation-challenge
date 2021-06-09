@@ -43,6 +43,10 @@ class SegmentationTrainer(BaseTrainer):
             if not recursive:
 
                 output = self.forward(data)
+                if self.criterion._get_name() == 'CombinedLoss':
+                    if self.criterion.adopt_weight:
+                        self.criterion.epoch = self.epoch
+
                 loss = self.compute_loss(output, target)
 
                 if train:
@@ -62,6 +66,9 @@ class SegmentationTrainer(BaseTrainer):
                 for i in range(K):
                     output = self.forward(
                         torch.cat((data.detach(), output.detach()), dim=1))
+                    if self.criterion._get_name() == 'CombinedLoss':
+                        if self.criterion.adopt_weight:
+                            self.criterion.epoch = self.epoch
 
                     _loss = self.compute_loss(output, target.detach())
                     _loss *= ((i + 1) / coeff)
@@ -92,7 +99,7 @@ class SegmentationTrainer(BaseTrainer):
         import matplotlib.pyplot as plt
         import numpy as np
 
-        samples = self.validation_dataset.get_random_sample(n=4)
+        samples = self.validation_dataset.get_random_sample(n=10)
         predictions, targets = self.transform(dataset=samples,
                                               classification=True)
         for i, sample in enumerate(samples):
@@ -112,7 +119,8 @@ class SegmentationTrainer(BaseTrainer):
 
             fig, axes = plt.subplots(ncols=3)
 
-            axes[0].imshow(image, alpha=0.3)
+            # axes[0].imshow(image, alpha=0.3)
+            axes[0].imshow(image)
             axes[0].axis("off")
             axes[1].imshow(target_rgb)
             axes[1].axis("off")

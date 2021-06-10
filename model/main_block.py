@@ -171,9 +171,9 @@ class ResConv(BaseModel):
 
 
 class SqueezeExciteBlock(BaseModel):
-    def __init__(self, in_features, reduction=16, squeeze=False):
+    def __init__(self, in_features, reduction=16, squeeze_flag=False):
         nn.Module.__init__(self)
-        self.squeeze = squeeze
+        self.squeeze_flag = squeeze_flag
         self.avgpool = nn.AdaptiveAvgPool2d(1)
         self.squeeze = Squeeze(in_features, norm_type='gn')
         self.fc = nn.Sequential(nn.Linear(in_features, int(in_features // reduction), bias=False),
@@ -183,7 +183,7 @@ class SqueezeExciteBlock(BaseModel):
 
     def forward(self, x):
         b, c, _, _ = x.size()
-        if self.squeeze:
+        if self.squeeze_flag:
             x = self.squeeze(x)
         y = self.avgpool(x).view(b, c)
         y = self.fc(y).view(b, c, 1, 1)

@@ -22,18 +22,18 @@ class IoU(torch.nn.Module):
         self.num_classes = num_classes
         self.reduction = reduction
 
-
     def forward(self, yhat, y, eps=1e-7):
         true_1_hot = torch.eye(self.num_classes)[y.type(
             torch.LongTensor).squeeze(1)]
         true_1_hot = true_1_hot.permute(0, 3, 1, 2).float()
+
         probas1 = F.softmax(yhat, dim=1)
 
         probas1 = torch.argmax(probas1, dim=1)
         probas = torch.zeros_like(yhat)
         probas[probas1 == 1, 1] = 1
         probas[probas1 == 2, 2] = 1
-
+        probas[probas.sum(dim=1) != 1, 0] = 1
 
         true_1_hot = true_1_hot.type(yhat.type())
         dims = (0,) + tuple(range(2, y.ndimension()))
@@ -62,6 +62,8 @@ class DiceScore(torch.nn.Module):
         probas = torch.zeros_like(yhat)
         probas[probas1 == 1, 1] = 1
         probas[probas1 == 2, 2] = 1
+        probas[probas.sum(dim=1) != 1, 0] = 1
+
         true_1_hot = true_1_hot.type(yhat.type())
         dims = (0,) + tuple(range(2, y.ndimension()))
         intersection = torch.sum(probas * true_1_hot, dims)
@@ -90,4 +92,3 @@ class FBeta(nn.Module):
         f_beta = ((1 + self.beta ** 2) * TP) / \
                  ((1 + self.beta ** 2) * TP + (self.beta ** 2) * FN + FP)
         return f_beta.numpy().item()
-

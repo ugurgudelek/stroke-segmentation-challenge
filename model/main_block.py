@@ -175,19 +175,21 @@ class SqueezeExciteBlock(BaseModel):
         nn.Module.__init__(self)
         self.squeeze_flag = squeeze_flag
         self.avgpool = nn.AdaptiveAvgPool2d(1)
-        self.squeeze = Squeeze(in_features, norm_type='gn')
+        if self.squeeze_flag:
+            self.squeeze = Squeeze(in_features, norm_type='gn')
         self.fc = nn.Sequential(nn.Linear(in_features, int(in_features // reduction), bias=False),
                                 nn.ReLU(inplace=True),
                                 nn.Linear(int(in_features // reduction), in_features, bias=False),
                                 nn.Sigmoid())
 
     def forward(self, x):
+        x_init = x
         b, c, _, _ = x.size()
         if self.squeeze_flag:
             x = self.squeeze(x)
         y = self.avgpool(x).view(b, c)
         y = self.fc(y).view(b, c, 1, 1)
-        return x * y.expand_as(x)
+        return x_init * y.expand_as(x_init)
 
 
 class Squeeze(BaseModel):

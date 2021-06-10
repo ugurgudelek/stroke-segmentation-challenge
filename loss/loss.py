@@ -14,6 +14,7 @@ import torchvision
 from scipy.ndimage import distance_transform_edt as distance
 from skimage import segmentation as skimage_seg
 
+
 class IoULoss(torch.nn.Module):
     def __init__(self, num_classes=3, reduction='mean'):
         super(IoULoss, self).__init__()

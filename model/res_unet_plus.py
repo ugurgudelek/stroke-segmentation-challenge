@@ -32,7 +32,7 @@ class ResUnetPlus(BaseModel):
 
         self.squeeze_excite1 = SqueezeExciteBlock(int(32 * k),
                                                   reduction=int(16 * k),
-                                                  squeeze=squeeze)
+                                                  squeeze_flag=squeeze)
 
         self.residual_conv1 = ResConv(int(32 * k),
                                       int(64 * k),
@@ -42,7 +42,7 @@ class ResUnetPlus(BaseModel):
 
         self.squeeze_excite2 = SqueezeExciteBlock(int(64 * k),
                                                   reduction=int(16 * k),
-                                                  squeeze=squeeze)
+                                                  squeeze_flag=squeeze)
 
         self.residual_conv2 = ResConv(int(64 * k),
                                       int(128 * k),
@@ -52,7 +52,7 @@ class ResUnetPlus(BaseModel):
 
         self.squeeze_excite3 = SqueezeExciteBlock(int(128 * k),
                                                   reduction=int(16 * k),
-                                                  squeeze=squeeze)
+                                                  squeeze_flag=squeeze)
 
         self.residual_conv3 = ResConv(int(128 * k),
                                       int(256 * k),

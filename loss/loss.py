@@ -11,6 +11,8 @@ import torch.nn.functional as F
 from torch.autograd import Variable
 import torchvision
 
+from scipy.ndimage import distance_transform_edt as distance
+from skimage import segmentation as skimage_seg
 
 class IoULoss(torch.nn.Module):
     def __init__(self, num_classes=3, reduction='mean'):
@@ -126,7 +128,7 @@ class TrevskyLoss(torch.nn.Module):
         self.reduction = reduction
 
     def forward(self, logit, true, eps=1e-7):
-        target_1_hot = torch.eye(self.num_classes)[target.type(
+        true_1_hot = torch.eye(self.num_classes)[target.type(
             torch.LongTensor).squeeze(1)]
         true_1_hot = true_1_hot.permute(0, 3, 1, 2).float()
         probas = F.softmax(logit, dim=1)
@@ -214,10 +216,6 @@ class VGGLoss(nn.Module):
         return loss
 
 
-from scipy.ndimage import distance_transform_edt as distance
-from skimage import segmentation as skimage_seg
-
-
 class BoundaryLoss(nn.Module):
     def __init__(self, reduction='mean', device='cuda'):
         super(BoundaryLoss, self).__init__()
@@ -288,15 +286,16 @@ class CombinedLoss(nn.Module):
 
     def forward(self, pred, target):
         if self.balance:
+            weight = torch.minimum(torch.tensor(self.epoch * self.weight[1]), torch.tensor(0.5))
 
-            loss = (1 - self.epoch * self.weight[1]) * self.main_criterion(pred, target) + \
-                   (self.epoch * self.weight[1]) * self.combined_criterion(pred, target)
+            loss = (1 - weight) * self.main_criterion(pred, target) + \
+                   weight * self.combined_criterion(pred, target)
 
 
         else:
 
             loss = self.weight[0] * self.main_criterion(pred, target) + \
-                   (epoch * self.weight[1]) * self.combined_criterion(pred, target)
+                   (self.epoch * self.weight[1]) * self.combined_criterion(pred, target)
 
         assert loss.shape[0] == target.shape[0]
         if self.reduction == 'sum':

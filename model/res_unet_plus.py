@@ -17,6 +17,7 @@ class ResUnetPlus(BaseModel):
                  in_features=3,
                  out_features=3,
                  k=1,
+                 squeeze=False,
                  norm_type='bn',
                  upsample_type='bilinear'):
         nn.Module.__init__(self)
@@ -30,7 +31,8 @@ class ResUnetPlus(BaseModel):
             nn.Conv2d(in_features, int(32 * k), kernel_size=3, padding=1))
 
         self.squeeze_excite1 = SqueezeExciteBlock(int(32 * k),
-                                                  reduction=int(16 * k))
+                                                  reduction=int(16 * k),
+                                                  squeeze=squeeze)
 
         self.residual_conv1 = ResConv(int(32 * k),
                                       int(64 * k),
@@ -39,7 +41,8 @@ class ResUnetPlus(BaseModel):
                                       norm_type=norm_type)
 
         self.squeeze_excite2 = SqueezeExciteBlock(int(64 * k),
-                                                  reduction=int(16 * k))
+                                                  reduction=int(16 * k),
+                                                  squeeze=squeeze)
 
         self.residual_conv2 = ResConv(int(64 * k),
                                       int(128 * k),
@@ -48,7 +51,8 @@ class ResUnetPlus(BaseModel):
                                       norm_type=norm_type)
 
         self.squeeze_excite3 = SqueezeExciteBlock(int(128 * k),
-                                                  reduction=int(16 * k))
+                                                  reduction=int(16 * k),
+                                                  squeeze=squeeze)
 
         self.residual_conv3 = ResConv(int(128 * k),
                                       int(256 * k),

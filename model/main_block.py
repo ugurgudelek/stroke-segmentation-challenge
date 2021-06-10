@@ -20,9 +20,10 @@ class Identity(nn.Module):
 
 ######### XNET #########
 class conv_block(BaseModel):
-    def __init__(self, in_features, out_features, kernel_size=3, padding=1, dilation=1, norm_type=None, use_bias=True):
+    def __init__(self, in_features, out_features, kernel_size=3, stride=1, padding=1, dilation=1, norm_type=None,
+                 use_bias=True):
         nn.Module.__init__(self)
-        self.conv = nn.Conv2d(in_features, out_features, kernel_size=kernel_size, stride=1, padding=padding,
+        self.conv = nn.Conv2d(in_features, out_features, kernel_size=kernel_size, stride=stride, padding=padding,
                               dilation=dilation, bias=use_bias)
 
         self.norm_type = norm_type
@@ -170,9 +171,11 @@ class ResConv(BaseModel):
 
 
 class SqueezeExciteBlock(BaseModel):
-    def __init__(self, in_features, reduction=16):
+    def __init__(self, in_features, reduction=16, squeeze=False):
         nn.Module.__init__(self)
+        self.squeeze = squeeze
         self.avgpool = nn.AdaptiveAvgPool2d(1)
+        self.squeeze = Squeeze(in_features, norm_type='gn')
         self.fc = nn.Sequential(nn.Linear(in_features, int(in_features // reduction), bias=False),
                                 nn.ReLU(inplace=True),
                                 nn.Linear(int(in_features // reduction), in_features, bias=False),
@@ -180,9 +183,26 @@ class SqueezeExciteBlock(BaseModel):
 
     def forward(self, x):
         b, c, _, _ = x.size()
+        if self.squeeze:
+            x = self.squeeze(x)
         y = self.avgpool(x).view(b, c)
         y = self.fc(y).view(b, c, 1, 1)
         return x * y.expand_as(x)
+
+
+class Squeeze(BaseModel):
+    def __init__(self, in_features, norm_type=None):
+        super(Squeeze, self).__init__()
+
+        self.squeeze1 = conv_block(in_features, in_features, kernel_size=9, stride=8, padding=4, norm_type=norm_type)
+        self.squeeze2 = conv_block(in_features, in_features, kernel_size=7, stride=4, padding=3, norm_type=norm_type)
+        self.squeeze3 = conv_block(in_features, in_features, kernel_size=5, stride=4, padding=2, norm_type=norm_type)
+
+    def forward(self, x):
+        x1 = self.squeeze1(x)
+        x2 = self.squeeze2(x1)
+        x3 = self.squeeze3(x2)
+        return x3
 
 
 class ResUASPP(BaseModel):
@@ -326,6 +346,7 @@ class DoubleASPP(BaseModel):
         x6 = self.out(torch.cat((x1, x2, x3, x4, x5), dim=1))
         return x6
 
+
 ############### R2AttNet ###############
 
 
@@ -408,9 +429,9 @@ class RRCNN_block(BaseModel):
             Recurrent_block(ch_out, t=t, norm_type=norm_type),
             Recurrent_block(ch_out, t=t, norm_type=norm_type)
         )
-        self.Conv_1x1 = nn.Conv2d(ch_in, ch_out, kernel_size=1,stride=1,padding=0)
+        self.Conv_1x1 = nn.Conv2d(ch_in, ch_out, kernel_size=1, stride=1, padding=0)
 
-    def forward(self,x):
+    def forward(self, x):
         x = self.Conv_1x1(x)
         x1 = self.RCNN(x)
-        return x+x1
+        return x + x1

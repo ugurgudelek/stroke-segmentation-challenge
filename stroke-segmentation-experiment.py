@@ -37,13 +37,14 @@ class StrokeExperiment(Experiment):
         self.params = {
             'project_name': 'stroke',
             'experiment_name':
-            'Rec1-ResUnetPlus-gn-k05-CombinedIoU-BD-balanced-weight-lr1e-4-bsize-4',
+            # 'Rec1-ResUnetPlus-gn-k05-CombinedIoU-BD-balanced-weight-lr1e-4-bsize-4',
+                'Rec1-ResUnetPlus-Sq-gn-k05-IoU-lr1e-4-bsize-4',
 
             # 'project_name': 'debug',
             # 'experiment_name': 'stroke',
             'seed': 42,
             'device': 'cuda' if torch.cuda.is_available() else 'cpu',
-            'resume': False,
+            'resume': True,
             'pretrained': False,
             'checkpoint': {
                 'on_epoch': 1000,
@@ -60,15 +61,24 @@ class StrokeExperiment(Experiment):
             },
             'root': Path('./'),
             'neptune': {
-                # 'id': 'STROK-389',
+                'id': 'STROK-590',
                 'workspace': 'machining',
                 'project': 'stroke',
+                # 'tags': [
+                #     'StrokeSeg',
+                #     'Recursive:1',
+                #     'ResUnetPlus(gn, k=0.5)',
+                #     'CombinedVgg', 'IoULoss', 'BoundaryLoss-balanced-weight'
+                #                               'lr:1e-4',
+                #     'bsize:4'
+                # ],
+
                 'tags': [
                     'StrokeSeg',
                     'Recursive:1',
-                    'ResUnetPlus(gn, k=0.5)',
-                    'CombinedVgg', 'IoULoss', 'BoundaryLoss-balanced-weight'
-                                              'lr:1e-4',
+                    'ResUnetPlus-Sqeeze(gn, k=0.5)',
+                    'IoULoss',
+                    'lr:1e-4',
                     'bsize:4'
                 ],
 
@@ -106,6 +116,7 @@ class StrokeExperiment(Experiment):
                                  out_features=3,
                                  k=0.5,
                                  norm_type='gn',
+                                 squeeze=True,
                                  upsample_type='bilinear')
 
         print(self.model)
@@ -167,15 +178,17 @@ class StrokeExperiment(Experiment):
         #         device=self.params['device']),
         #     weight=[1, 0.1],
         #     reduction='none')
-        self.criterion = local_loss.CombinedLoss(main_criterion=local_loss.IoULoss(reduction='none'),
-                                                 combined_criterion=local_loss.BoundaryLoss(reduction='none',
-                                                                                            device=self.params[
-                                                                                                'device']),
-                                                 weight=[1, 0.01],
-                                                 balance=True,
-                                                 adopt_weight=True,
-                                                 reduction='none'
-                                                 )
+        # self.criterion = local_loss.CombinedLoss(main_criterion=local_loss.IoULoss(reduction='none'),
+        #                                          combined_criterion=local_loss.BoundaryLoss(reduction='none',
+        #                                                                                     device=self.params[
+        #                                                                                         'device']),
+        #                                          weight=[1, 0.01],
+        #                                          balance=True,
+        #                                          adopt_weight=True,
+        #                                          reduction='none'
+        #                                          )
+
+        self.criterion = local_loss.IoULoss()
 
         self.optimizer = Adam(params=self.model.parameters(),
                               lr=self.hyperparams['lr'],
@@ -193,8 +206,8 @@ class StrokeExperiment(Experiment):
             metrics=[
                 IoU(),
                 DiceScore(),
-                local_loss.IoULoss(reduction='mean'),
-                local_loss.BoundaryLoss(device='cpu', reduction='mean')
+                # local_loss.IoULoss(reduction='mean'),
+                # local_loss.BoundaryLoss(device='cpu', reduction='mean')
             ],
             hyperparams=self.hyperparams,
             params=self.params,

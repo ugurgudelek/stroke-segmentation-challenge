@@ -197,7 +197,7 @@ class StrokeSegmentationDataset:
         dataset = xr.open_dataset(self.root / 'nc/stroke-segmentation.nc')
 
         if debug:
-            _id = np.random.permutation(dataset.id.values)[:100]
+            _id = np.random.permutation(dataset.id.values)[:64]
             dataset = dataset.sel({'id': _id})
         train_ids, test_ids = train_test_split(dataset.id.values,
                                                test_size=test_size,

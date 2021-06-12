@@ -45,6 +45,7 @@ class SegmentationTrainer(BaseTrainer):
                 output = self.forward(data)
                 if self.criterion._get_name() == 'CombinedLoss':
                     if self.criterion.adopt_weight:
+
                         self.criterion.epoch = self.epoch
 
                 loss = self.compute_loss(output, target)

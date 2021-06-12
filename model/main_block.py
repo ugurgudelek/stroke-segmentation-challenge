@@ -31,7 +31,7 @@ class conv_block(BaseModel):
             self.norm = nn.GroupNorm(32 if out_features >= 32 else out_features, out_features)
         if self.norm_type == 'bn':
             self.norm = nn.BatchNorm2d(out_features)
-        self.relu = nn.ReLU()
+        self.relu = nn.ReLU(inplace=True)
 
     def forward(self, x):
         x = self.conv(x)
@@ -64,7 +64,7 @@ class DSconv_block(BaseModel):
 
         if self.norm_type == 'bn':
             self.norm = nn.BatchNorm2d(in_features)
-        self.relu = nn.ReLU()
+        self.relu = nn.ReLU(inplace=True)
         self.conv2d = conv_block(in_features, out_features, kernel_size=1, padding=0, norm_type=norm_type)
 
     def forward(self, x):
@@ -151,7 +151,7 @@ class ResConv(BaseModel):
             self.norm2 = nn.BatchNorm2d(out_features)
 
         self.pack = nn.Sequential(self.norm1,
-                                  nn.ReLU(),
+                                  nn.ReLU(inplace=True),
                                   nn.Conv2d(in_channels=in_features, out_channels=out_features,
                                             kernel_size=kernel_size, stride=stride, padding=padding),
                                   self.norm2,
@@ -263,20 +263,20 @@ class AttentionBlock(BaseModel):
 
         self.conv_encoder = nn.Sequential(
             self.norm1,
-            nn.ReLU(),
+            nn.ReLU(inplace=True),
             nn.Conv2d(input_encoder, output_dim, 3, padding=1),
             nn.MaxPool2d(2, 2),
         )
 
         self.conv_decoder = nn.Sequential(
             self.norm2,
-            nn.ReLU(),
+            nn.ReLU(inplace=True),
             nn.Conv2d(input_decoder, output_dim, 3, padding=1),
         )
 
         self.conv_attn = nn.Sequential(
             self.norm3,
-            nn.ReLU(),
+            nn.ReLU(inplace=True),
             nn.Conv2d(output_dim, 1, 1),
         )
 

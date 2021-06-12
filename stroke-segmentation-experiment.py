@@ -37,8 +37,8 @@ class StrokeExperiment(Experiment):
         self.params = {
             'project_name': 'stroke',
             'experiment_name':
-            # 'Rec1-ResUnetPlus-gn-k05-CombinedIoU-BD-balanced-weight-lr1e-4-bsize-4',
-                'Rec1-ResUnetPlus-Sq-gn-k05-IoU-lr1e-4-bsize-4',
+            # # 'Rec1-ResUnetPlus-gn-k05-CombinedIoU-BD-balanced-weight-lr1e-4-bsize-4',
+                'ResUnetPlus-Sq-gn-k05-IoU-lr1e-4-bsize-5-pretrained-0-dataaug-2-TL-0',
 
             # 'project_name': 'debug',
             # 'experiment_name': 'stroke',
@@ -61,25 +61,21 @@ class StrokeExperiment(Experiment):
             },
             'root': Path('./'),
             'neptune': {
-                'id': 'STROK-590',
+                'id': 'STROK-596',
                 'workspace': 'machining',
                 'project': 'stroke',
-                # 'tags': [
-                #     'StrokeSeg',
-                #     'Recursive:1',
-                #     'ResUnetPlus(gn, k=0.5)',
-                #     'CombinedVgg', 'IoULoss', 'BoundaryLoss-balanced-weight'
-                #                               'lr:1e-4',
-                #     'bsize:4'
-                # ],
-
                 'tags': [
                     'StrokeSeg',
                     'Recursive:1',
-                    'ResUnetPlus-Sqeeze(gn, k=0.5)',
+                    'ResUnetPlus(gn, k:0.5, squeeze:1)',
+                    # 'CombinedVgg',
                     'IoULoss',
+                    # 'BoundaryLoss-balanced-weight'
                     'lr:1e-4',
-                    'bsize:4'
+                    'bsize:5'
+
+                    # 'tags': ['StrokeSeg', 'ResUnetPlus-gn-k05-IoU-lr1e-4-bsize-5-pretrained-0-dataaug-2-TL-0'
+
                 ],
 
                 # 'tags': [' '
@@ -93,8 +89,8 @@ class StrokeExperiment(Experiment):
             'lr': 0.0001,
             'weight_decay': 0.,
             'epoch': 500,
-            'batch_size': 4,
-            'validation_batch_size': 4,
+            'batch_size': 5,
+            'validation_batch_size': 5,
             # 'recursive': {
             #     'K': 3
             # }

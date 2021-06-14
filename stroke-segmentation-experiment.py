@@ -26,7 +26,7 @@ from model.xnet import XNET
 from trainer.segmentation import SegmentationTrainer
 from dataset.stroke import Stroke
 
-from metric.segmentation import IoU, DiceScore, FBeta
+from metric.segmentation import IoU, DiceScore, FBeta, PostIoU, MaskMeanMetric
 import loss.loss as local_loss
 
 import torchmetrics
@@ -38,7 +38,7 @@ class StrokeExperiment(Experiment):
             'project_name': 'stroke',
             'experiment_name':
             # # 'Rec1-ResUnetPlus-gn-k05-CombinedIoU-BD-balanced-weight-lr1e-4-bsize-4',
-                'ResUnetPlus-Sq-gn-k05-IoU-lr1e-4-bsize-5-pretrained-0-dataaug-2-TL-0',
+                'ResUnetPlus-gn-k05-IoU-lr1e-4-bsize-5-pretrained-0-dataaug-2-TL-0',
 
             # 'project_name': 'debug',
             # 'experiment_name': 'stroke',
@@ -48,7 +48,7 @@ class StrokeExperiment(Experiment):
             'pretrained': False,
             'checkpoint': {
                 'on_epoch': 1000,
-                'metric': IoU.__name__.lower(),
+                'metric': PostIoU.__name__.lower(),
                 'trigger': lambda new, old: new > old
             },
             'log': {
@@ -61,13 +61,13 @@ class StrokeExperiment(Experiment):
             },
             'root': Path('./'),
             'neptune': {
-                'id': 'STROK-596',
+                'id': 'STROK-597',
                 'workspace': 'machining',
                 'project': 'stroke',
                 'tags': [
                     'StrokeSeg',
                     'Recursive:1',
-                    'ResUnetPlus(gn, k:0.5, squeeze:1)',
+                    'ResUnetPlus(gn, k:0.5, squeeze:0)',
                     # 'CombinedVgg',
                     'IoULoss',
                     # 'BoundaryLoss-balanced-weight'
@@ -201,7 +201,8 @@ class StrokeExperiment(Experiment):
             criterion=self.criterion,
             metrics=[
                 IoU(),
-                DiceScore(),
+                PostIoU(),
+                MaskMeanMetric()
                 # local_loss.IoULoss(reduction='mean'),
                 # local_loss.BoundaryLoss(device='cpu', reduction='mean')
             ],

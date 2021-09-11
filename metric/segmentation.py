@@ -15,7 +15,7 @@ class Accuracy(nn.Module):
         preds = (torch.argmax(yhat, dim=1))
         acc = (torch.sum(preds == y)) / (preds.size(0) * preds.size(1) *
                                          preds.size(2))
-        return acc.numpy().item()
+        return acc.cpu().numpy().item()
 
 
 class IoU(torch.nn.Module):
@@ -51,14 +51,13 @@ class IoU(torch.nn.Module):
         jacc = (intersection / (union + eps))
         jacc_loss = torch.mean(jacc.mean(1))
 
-
         # dims = (0,) + tuple(range(2, y.ndimension()))
         # intersection = torch.sum(probas * true_1_hot, dims)
         # cardinality = torch.sum(probas + true_1_hot, dims)
         # union = cardinality - intersection
         # jacc_loss = (intersection / (union + eps))
 
-        return jacc_loss.numpy().item()
+        return jacc_loss.cpu().numpy().item()
 
 
 class DiceScore(torch.nn.Module):
@@ -81,12 +80,12 @@ class DiceScore(torch.nn.Module):
         probas[probas.sum(dim=1) != 1, 0] = 1
 
         true_1_hot = true_1_hot.type(yhat.type())
-        dims = (0,) + tuple(range(2, y.ndimension()))
+        dims = (0, ) + tuple(range(2, y.ndimension()))
         intersection = torch.sum(probas * true_1_hot, dims)
         cardinality = torch.sum(probas + true_1_hot, dims)
         dice_loss = ((2. * intersection + self.smooth) /
                      (cardinality + eps + self.smooth)).mean()
-        return dice_loss.numpy().item()
+        return dice_loss.cpu().numpy().item()
 
 
 class FBeta(nn.Module):
@@ -107,7 +106,7 @@ class FBeta(nn.Module):
 
         f_beta = ((1 + self.beta ** 2) * TP) / \
                  ((1 + self.beta ** 2) * TP + (self.beta ** 2) * FN + FP)
-        return f_beta.numpy().item()
+        return f_beta.cpu().numpy().item()
 
 
 class PostIoU(nn.Module):
@@ -130,10 +129,12 @@ class PostIoU(nn.Module):
         for i in range(len(y)):
             m1 = mask1[i, :, :]
             m2 = mask2[i, :, :]
-            erosion1.append(cv2.erode(m1.numpy(), kernel, iterations=1))
-            dilation1.append(cv2.dilate(m1.numpy(), kernel, iterations=1))
-            erosion2.append(cv2.erode(m2.numpy(), kernel, iterations=1))
-            dilation2.append(cv2.dilate(m2.numpy(), kernel, iterations=1))
+            erosion1.append(cv2.erode(m1.cpu().numpy(), kernel, iterations=1))
+            dilation1.append(cv2.dilate(m1.cpu().numpy(), kernel,
+                                        iterations=1))
+            erosion2.append(cv2.erode(m2.cpu().numpy(), kernel, iterations=1))
+            dilation2.append(cv2.dilate(m2.cpu().numpy(), kernel,
+                                        iterations=1))
 
         erosion1 = torch.tensor(erosion1, dtype=torch.uint8)
         dilation1 = torch.tensor(dilation1, dtype=torch.uint8)
@@ -148,14 +149,17 @@ class PostIoU(nn.Module):
         dilatedGroundtruth[dilation1 == 1] = 1
         dilatedGroundtruth[dilation2 == 1] = 2
 
-        intersection = torch.where(torch.logical_and(dilatedGroundtruth == probas, dilatedGroundtruth != 0), 1, 0)
+        intersection = torch.where(
+            torch.logical_and(dilatedGroundtruth == probas,
+                              dilatedGroundtruth != 0), 1, 0)
         intersectionCount = torch.count_nonzero(intersection, dim=(1, 2))
 
-        union = torch.where(torch.logical_or(erodedGroundtruth != 0, probas != 0), 1, 0)
+        union = torch.where(
+            torch.logical_or(erodedGroundtruth != 0, probas != 0), 1, 0)
         unionCount = torch.count_nonzero(union, dim=(1, 2))
 
         score = intersectionCount / unionCount
-        return score.mean().numpy().item()
+        return score.mean().cpu().numpy().item()
 
 
 class MaskMeanMetric(nn.Module):
@@ -171,14 +175,21 @@ class MaskMeanMetric(nn.Module):
         class1Color = (255, 0, 0)
         class2Color = (0, 255, 0)
 
-        groundtruth_maskRGB = np.zeros((y.numpy().shape[0], y.numpy().shape[1], y.numpy().shape[2], 3), dtype=np.uint8)
-        groundtruth_maskRGB[y.numpy() == 1] = class1Color
-        groundtruth_maskRGB[y.numpy() == 2] = class2Color
-        groundtruth_maskRGB = torch.tensor(groundtruth_maskRGB, dtype=torch.uint8)
+        groundtruth_maskRGB = np.zeros(
+            (y.cpu().numpy().shape[0], y.cpu().numpy().shape[1],
+             y.cpu().numpy().shape[2], 3),
+            dtype=np.uint8)
+        groundtruth_maskRGB[y.cpu().numpy() == 1] = class1Color
+        groundtruth_maskRGB[y.cpu().numpy() == 2] = class2Color
+        groundtruth_maskRGB = torch.tensor(groundtruth_maskRGB,
+                                           dtype=torch.uint8)
 
-        predicted_maskRGB = np.zeros((probas.numpy().shape[0], probas.numpy().shape[1], probas.numpy().shape[2], 3), dtype=np.uint8)
-        predicted_maskRGB[probas.numpy() == 1] = class1Color
-        predicted_maskRGB[probas.numpy() == 2] = class2Color
+        predicted_maskRGB = np.zeros(
+            (probas.cpu().numpy().shape[0], probas.cpu().numpy().shape[1],
+             probas.cpu().numpy().shape[2], 3),
+            dtype=np.uint8)
+        predicted_maskRGB[probas.cpu().numpy() == 1] = class1Color
+        predicted_maskRGB[probas.cpu().numpy() == 2] = class2Color
         predicted_maskRGB = torch.tensor(predicted_maskRGB, dtype=torch.uint8)
 
         maskr = torch.clone(groundtruth_maskRGB[:, :, :, 0])
@@ -192,10 +203,12 @@ class MaskMeanMetric(nn.Module):
         for i in range(len(y)):
             m1 = maskr[i, :, :]
             m2 = maskg[i, :, :]
-            erosionr.append(cv2.erode(m1.numpy(), kernel, iterations=1))
-            dilationr.append(cv2.dilate(m1.numpy(), kernel, iterations=1))
-            erosiong.append(cv2.erode(m2.numpy(), kernel, iterations=1))
-            dilationg.append(cv2.dilate(m2.numpy(), kernel, iterations=1))
+            erosionr.append(cv2.erode(m1.cpu().numpy(), kernel, iterations=1))
+            dilationr.append(cv2.dilate(m1.cpu().numpy(), kernel,
+                                        iterations=1))
+            erosiong.append(cv2.erode(m2.cpu().numpy(), kernel, iterations=1))
+            dilationg.append(cv2.dilate(m2.cpu().numpy(), kernel,
+                                        iterations=1))
 
         erosionr = torch.tensor(erosionr, dtype=torch.uint8)
         dilationr = torch.tensor(dilationr, dtype=torch.uint8)
@@ -217,18 +230,23 @@ class MaskMeanMetric(nn.Module):
         totalfn = torch.zeros((len(yhat), ))
         totaltp = torch.zeros((len(yhat), ))
         totaltn = torch.zeros((len(yhat), ))
-        fpimg = torch.where(torch.logical_and(dilated_gt == 0, predicted_maskRGB == 255), 255, 0)
+        fpimg = torch.where(
+            torch.logical_and(dilated_gt == 0, predicted_maskRGB == 255), 255,
+            0)
         fp = torch.count_nonzero(fpimg, dim=(1, 2, 3))
         totalfp = totalfp + fp
 
-        fnimg = torch.where(torch.logical_and(eroded_gt == 255, predicted_maskRGB == 0), 255, 0)
+        fnimg = torch.where(
+            torch.logical_and(eroded_gt == 255, predicted_maskRGB == 0), 255,
+            0)
         fn = torch.count_nonzero(fnimg, dim=(1, 2, 3))
         totalfn = totalfn + fn
 
         tp = (torch.count_nonzero(predicted_maskRGB, dim=(1, 2, 3)) - fp)
         totaltp = totaltp + tp
 
-        area = torch.ones((len(y), )) * (predicted_maskRGB.shape[1] * predicted_maskRGB.shape[2])
+        area = torch.ones((len(y), )) * (predicted_maskRGB.shape[1] *
+                                         predicted_maskRGB.shape[2])
         tn = area - (fp + fn + tp)
         totaltn = totaltn + tn
 
@@ -237,4 +255,4 @@ class MaskMeanMetric(nn.Module):
 
         score = (sensitivity + specifity) / 2
 
-        return score.mean().numpy().item()
+        return score.mean().cpu().numpy().item()

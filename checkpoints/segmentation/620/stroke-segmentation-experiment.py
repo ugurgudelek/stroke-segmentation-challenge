@@ -22,6 +22,7 @@ from dataset.stroke import StrokeSegmentationDataset
 from model.res_unet_plus import ResUnetPlus
 from model.res_unet import ResUnet
 from model.xnet import XNET
+from model.r2_att_unet import R2AttU_Net
 
 from trainer.segmentation import SegmentationTrainer
 from dataset.stroke import Stroke
@@ -34,11 +35,11 @@ import torchmetrics
 
 class StrokeExperiment(Experiment):
     def __init__(self):
+        super().__init__()
         self.params = {
             'project_name': 'stroke',
             'experiment_name':
-            # # 'Rec1-ResUnetPlus-gn-k05-CombinedIoU-BD-balanced-weight-lr1e-4-bsize-4',
-                'ResUnetPlus-gn-k05-IoU-lr1e-4-bsize-5-pretrained-0-dataaug-2-TL-0',
+            'Rec1-ResUnetPlus-gn-k05-Combined-Iou-vggLoss-lr1e-5-bsize-4',
 
             # 'project_name': 'debug',
             # 'experiment_name': 'stroke',
@@ -61,17 +62,17 @@ class StrokeExperiment(Experiment):
             },
             'root': Path('./'),
             'neptune': {
-                'id': 'STROK-597',
+                'id': 'STROK-620',
                 'workspace': 'machining',
                 'project': 'stroke',
                 'tags': [
                     'StrokeSeg',
                     'Recursive:1',
-                    'ResUnetPlus(gn, k:0.5, squeeze:0)',
-                    # 'CombinedVgg',
-                    'IoULoss',
-                    # 'BoundaryLoss-balanced-weight'
-                    'lr:1e-4',
+                    'ResUnetPlus(gn, k:05, squeeze)',
+                    'CombinedVgg',
+                    # 'CE',
+                    'IoU-vgg'
+                    'lr:1e-5',
                     'bsize:5'
 
                     # 'tags': ['StrokeSeg', 'ResUnetPlus-gn-k05-IoU-lr1e-4-bsize-5-pretrained-0-dataaug-2-TL-0'
@@ -86,11 +87,11 @@ class StrokeExperiment(Experiment):
         }  # yapf: disable
 
         self.hyperparams = {
-            'lr': 1e-4,
+            'lr': 0.0001,
             'weight_decay': 0.,
-            'epoch': 500,
-            'batch_size': 5,
-            'validation_batch_size': 5,
+            'epoch': 1700,
+            'batch_size': 4,
+            'validation_batch_size': 4
             # 'recursive': {
             #     'K': 3
             # }
@@ -114,6 +115,20 @@ class StrokeExperiment(Experiment):
                                  norm_type='gn',
                                  squeeze=True,
                                  upsample_type='bilinear')
+
+        # self.model = R2AttU_Net(in_features=3 *
+        #                                      (2 if 'recursive' in self.hyperparams else 1),
+        #                          out_features=3,
+        #                          t=2,
+        #                          k=0.25,
+        #                          norm_type='gn')
+
+        # self.model = ResUnet(in_features=3 *
+        #                                  (2 if 'recursive' in self.hyperparams else 1),
+        #                      out_features=3,
+        #                      k=1,
+        #                      norm_type='gn',
+        #                      )
 
         print(self.model)
 
@@ -144,10 +159,11 @@ class StrokeExperiment(Experiment):
             Ap.ToTensorV2()
         ])
 
-        self.val_transform = A.Compose(
-            [A.Resize(256, 256),
-             A.CenterCrop(224, 224),
-             Ap.ToTensorV2()])
+        self.val_transform = A.Compose([
+            # A.Resize(256, 256),
+            # A.CenterCrop(224, 224),
+            Ap.ToTensorV2()
+        ])
 
         self.dataset = StrokeSegmentationDataset(
             Path('./input/teknofest'),
@@ -163,16 +179,17 @@ class StrokeExperiment(Experiment):
             params=self.params,
             hyperparams=self.hyperparams)
 
-        # self.criterion = local_loss.CombinedLoss(
-        #     main_criterion=local_loss.IoULoss(reduction='none'),
-        #     combined_criterion=local_loss.VGGLoss(
-        #         extractor=local_loss.VGGExtractor(
-        #             device=self.params['device']),
-        #         criterion=nn.MSELoss(reduction='none'),
-        #         reduction='none',
-        #         device=self.params['device']),
-        #     weight=[1, 0.1],
-        #     reduction='none')
+        self.criterion = local_loss.CombinedLoss(
+            main_criterion=local_loss.IoULoss(reduction='none'),
+            combined_criterion=local_loss.VGGLoss(
+                extractor=local_loss.VGGExtractor(
+                    device=self.params['device']),
+                criterion=nn.MSELoss(reduction='none'),
+                reduction='none',
+                device=self.params['device']),
+            weight=[1, 0.1],
+            reduction='none')
+
         # self.criterion = local_loss.CombinedLoss(main_criterion=local_loss.IoULoss(reduction='none'),
         #                                          combined_criterion=local_loss.BoundaryLoss(reduction='none',
         #                                                                                     device=self.params[
@@ -183,7 +200,7 @@ class StrokeExperiment(Experiment):
         #                                          reduction='none'
         #                                          )
 
-        self.criterion = local_loss.IoULoss()
+        # self.criterion = local_loss.EnhancedMixingLoss(reduction='none')
 
         self.optimizer = Adam(params=self.model.parameters(),
                               lr=self.hyperparams['lr'],

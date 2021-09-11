@@ -29,3 +29,11 @@ dependencies:
   - albumentations
   - nibabel
   - torchmetrics
+  - pydicom
+  - openjpeg
+  - jpeg
+  
+pip:
+  - python-gdcm
+  - pillow # pip install --no-cache-dir -I pillow
+  - opencv-python

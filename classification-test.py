@@ -28,6 +28,7 @@ PRETRAINED_MODEL_PATH = Path(
     './checkpoints/classification/170/model-optim.pth')
 OUTPUT_PATH = Path('input/teknofest/contest/output/classification')
 HOLD_PROBABILITY = 1.
+INFER_LABEL = True
 
 params = {
     'resume': False,
@@ -61,7 +62,7 @@ print(model)
 # ])
 
 xr_dataset = Stroke.from_path_classification(png_path=PNG_PATH,
-                                             infer_label=True,
+                                             infer_label=INFER_LABEL,
                                              hold_prop=HOLD_PROBABILITY)
 torch_dataset = StrokeClassificationTorch(xr_dataset.image.values,
                                           xr_dataset.label.values,
@@ -89,7 +90,7 @@ predictions, targets = trainer.transform(dataset=torch_dataset,
 prediction_dataframe = pd.DataFrame({
     'ID': xr_dataset.id.values,
     'ETiKET': predictions.squeeze(),
-    # 'target': targets.squeeze()
+    'target': targets.squeeze()
 })# yapf:disable
 
 prediction_dataframe.to_csv(OUTPUT_PATH / 'OTURUM1.csv', index=False)

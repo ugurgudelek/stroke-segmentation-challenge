@@ -28,7 +28,8 @@ from PIL import Image
 PNG_PATH = Path('input/teknofest/contest/input/segmentation/PNG')
 PRETRAINED_MODEL_PATH = Path('./checkpoints/segmentation/620/model-optim.pth')
 OUTPUT_PATH = Path('input/teknofest/contest/output/segmentation')
-HOLD_PROBABILITY = 0.05
+HOLD_PROBABILITY = 0.2
+INFER_MASK = True
 
 params = {
     'resume': False,
@@ -48,7 +49,7 @@ model = ResUnetPlus(in_features=3,
 
 stroke_dataset = Stroke(root=None)
 xr_dataset = Stroke.from_path_segmentation(png_path=PNG_PATH,
-                                           infer_mask=True,
+                                           infer_mask=INFER_MASK,
                                            hold_prop=HOLD_PROBABILITY)
 torch_dataset = StrokeSegmentationTorch(images=xr_dataset.image.values,
                                         masks=xr_dataset.mask.values,

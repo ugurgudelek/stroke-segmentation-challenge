@@ -33,7 +33,7 @@ dependencies:
   - openjpeg
   - jpeg
   
-pip:
-  - python-gdcm
-  - pillow # pip install --no-cache-dir -I pillow
-  - opencv-python
+# pip:
+#   - python-gdcm
+#   - pillow
+#   - opencv-python

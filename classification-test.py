@@ -22,13 +22,13 @@ from model.cnn import VGG16, CNN, DenseNet, ResNet, CustomCNN
 from metric import classification as local_metrics
 from dataset.stroke import Stroke
 
-PNG_PATH = Path('input/teknofest/contest/input/classification/PNG')
+PNG_PATH = Path('input/teknofest/contest/input/classification/PNG_OTURUM1')
 # PNG_PATH = Path('input/teknofest/raw/KANAMA/PNG')
 PRETRAINED_MODEL_PATH = Path(
     './checkpoints/classification/170/model-optim.pth')
 OUTPUT_PATH = Path('input/teknofest/contest/output/classification')
 HOLD_PROBABILITY = 1.
-INFER_LABEL = True
+INFER_LABEL = False
 
 params = {
     'resume': False,
@@ -90,10 +90,10 @@ predictions, targets = trainer.transform(dataset=torch_dataset,
 prediction_dataframe = pd.DataFrame({
     'ID': xr_dataset.id.values,
     'ETiKET': predictions.squeeze(),
-    'target': targets.squeeze()
+    # 'target': targets.squeeze()
 })# yapf:disable
 
-prediction_dataframe.to_csv(OUTPUT_PATH / 'OTURUM1.csv', index=False)
+prediction_dataframe.to_csv(OUTPUT_PATH / 'OTURUM1.csv', index=False, sep=';')
 
 print(prediction_dataframe)
 
